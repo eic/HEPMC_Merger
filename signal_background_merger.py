@@ -8,14 +8,14 @@ import random
 import pyhepmc as hep
 import random as rd
 from datetime import datetime
-import argparse
-import helper
 
+import helper
+import argparse
 
 if __name__ == '__main__':
     
 
-    parser = argparse.ArgumentParser(description='Analyzing hits from synchrotron radiation')
+    parser = argparse.ArgumentParser(description='Merging Background and signal files')
     parser.add_argument('--one_background_particle', 
                         help='Set to True if all the background vertices in the file are to be connected temporally and spatially and False for backgrounds with many particles in the event like SR (synchrotron radiation)', 
                         action='store_true', default=True)
