@@ -1,11 +1,9 @@
-import random
-#need to install the pyhepmc module in order to import. python bindings to HEPMC
-#!pip install pyhepmc
 import pyhepmc as hep
 import random as rd
 from datetime import datetime
 import argparse
 
+# ============================================================================================
 #opens HEPMC File in any generation and appends each event to a container which is then returned
 def fileProcess(fileName):
     container=[]
@@ -17,7 +15,7 @@ def fileProcess(fileName):
 
     return container
 
-
+# ============================================================================================
 def merger(one_background_particle,shift,Int_Window,sig_cont,back_cont):
     #container for combo events
     combo_cont=[]
@@ -113,7 +111,7 @@ def merger(one_background_particle,shift,Int_Window,sig_cont,back_cont):
     print(back_cont[0])
     print(combo_cont[0])'''
 
-
+# ============================================================================================
 def nameGen(numEvents):
     # datetime object containing current date and time
     now = datetime.now()
@@ -128,6 +126,7 @@ def nameGen(numEvents):
     name='Sig_Back_Combo_{}event_{}.hepmc'.format(numEvents,dt_string)
     return name
 
+# ============================================================================================
 def fileWriter(combo_cont):
     numEvents=len(combo_cont)
     name=nameGen(numEvents)
@@ -139,13 +138,9 @@ def fileWriter(combo_cont):
             f.write_event(i)
     f.close()
 
-
-
-
-
-
+# ============================================================================================
+# Main function
 if __name__ == '__main__':
-    
 
     parser = argparse.ArgumentParser(description='Merging Background and signal files')
     parser.add_argument('--one_background_particle', 
@@ -165,8 +160,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     #initiation of the variables
-    #c_light  = 299.792458 mm/ns to get mm
-    c_light  = 299.792458
+    c_light  = 299.792458 # speed of light = 299.792458 mm/ns to get mm
 
     #Whether or not we move the signal event
     shift=args.shifter
@@ -174,11 +168,9 @@ if __name__ == '__main__':
 
     #Depending on the background type.
     #SR Synchrotron radiation will be set too false since there will be many individual photons
-    #
     one_background_particle=args.one_background_particle
 
     print(one_background_particle)
-    
 
     #opens up the signal file and extracts all individual events stores these events in sig_cont
     #with hep.open("pythia8NCDIS_10x100_minQ2=1_beamEffects_xAngle=-0.025_hiDiv_1_000.hepmc") as f:
@@ -188,13 +180,10 @@ if __name__ == '__main__':
     #with hep.open("photon_event16_03_2023_02_05_02.hepmc") as f:
     back_cont=fileProcess(args.Background_File)
 
-
     #merger(one_background_particle,shift,Int_Window,sig_cont,back_cont)
     combo_cont= merger(args.one_background_particle,args.shifter,args.Int_Window,sig_cont,back_cont)
 
     fileWriter(combo_cont)
-    #_____________________________________________________________________________________________________________________________________________
-
     
 
     

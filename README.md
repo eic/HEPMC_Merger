@@ -1,6 +1,13 @@
-## Signal and Background Merger Code
+# Signal and Background Merger Code
+
 this code is used to combine two HEPMC files.
-# Variables
+
+## Dependencies
+
+We need to install the ```pyhepmc``` module (e.g. ```pip install pyhepmc```).
+
+## Variables
+
 1. one_background_particle
 	- default=True
 	- Set to True if all the background vertices in the file are to be connected temporally and spatially and False for backgrounds with many particles in the event like SR (synchrotron radiation)
