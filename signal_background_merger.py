@@ -133,8 +133,11 @@ def nameGen(numEvents):
 def fileWriter(combo_cont):
     numEvents=len(combo_cont)
     name=nameGen(numEvents)
+    Event_ind=0
     with hep.WriterAsciiHepMC2(name) as f:
         for i in combo_cont:
+            i.event_number=Event_ind
+            Event_ind=Event_ind+1
             f.write_event(i)
     f.close()
 
