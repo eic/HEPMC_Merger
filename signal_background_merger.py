@@ -24,7 +24,7 @@ def merger(one_background_particle,shift,Int_Window,sig_cont,back_cont):
     #container for combo events
     combo_cont=[]
 
-    for i in range(len(sig_cont)):
+    for i in range(min(len(sig_cont),len(back_cont))):
         combo_cont.append(hep.GenEvent(hep.Units.GEV, hep.Units.MM))
         sig_particles=[]
         sig_vertices=[]
@@ -176,7 +176,7 @@ if __name__ == '__main__':
     #Depending on the background type.
     #SR Synchrotron radiation will be set too false since there will be many individual photons
     #
-    one_background_particle=args.one_background_particle
+    one_background_particle=False #args.one_background_particle
 
     
     
