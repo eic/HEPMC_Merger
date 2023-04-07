@@ -150,10 +150,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Merging Background and signal files')
     parser.add_argument('--one_background_particle', 
                         help='Set to True if all the background vertices in the file are to be connected temporally and spatially and False for backgrounds with many particles in the event like SR (synchrotron radiation)', 
-                        action='store_true', default=True)
+                        action='store_true')
     parser.add_argument('--shifter', 
                         help='depending on how integration frames are decided, the signal event will either be positioned at time 0 (False) or set to a random time within the integration window', 
-                        action='store_true', default=True)
+                        action='store_true')
     parser.add_argument('--Int_Window', action='store', type=int, default=2000,
                         help='length of the integration window in nanoseconds')
     parser.add_argument('--Signal_File', action='store',
@@ -175,9 +175,9 @@ if __name__ == '__main__':
     #Depending on the background type.
     #SR Synchrotron radiation will be set too false since there will be many individual photons
     #
-    one_background_particle=False #args.one_background_particle
+    one_background_particle=args.one_background_particle
 
-    
+    print(one_background_particle)
     
 
     #opens up the signal file and extracts all individual events stores these events in sig_cont
