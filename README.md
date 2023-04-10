@@ -1,8 +1,7 @@
-# Signal and Background Merger Code
+# EPIC HEPMC MERGER
+## author: Benjamen Sterwerf, UC Berkeley (bsterwerf@berkeley.edu)
 
-This code is used to combine two HEPMC files.
-
-You can run this code as:
+This code is used to combine HEPMC files. You can run this code as:
 
 ```bash
 python signal_background_merger.py --Signal_File signal.hepmc --Background_Files background_1.hepmc background_2.hepmc
