@@ -102,7 +102,7 @@ def merger(one_background_particle,shift,Int_Window,sig_cont,back_cont):
                 p1.generated_mass = particle.generated_mass
                 back_particles.append(p1)
                 # since the beam particles do not have a production vertex they cannot be attached to a production vertex
-                if not particle.production_vertex.id<0:
+                if particle.production_vertex.id<0:
                     production_vertex=particle.production_vertex.id
                     back_vertices[abs(production_vertex)-1].add_particle_out(p1)
                     combo_cont[i].add_particle(p1)
@@ -123,7 +123,7 @@ def nameGen(numEvents):
     # YY/mm/dd H:M:S
     dt_string = now.strftime("%Y_%m_%d_%H_%M_%S")
 
-    name='Sig_Back_Combo_{}event_{}.hepmc'.format(numEvents,dt_string)
+    name='Sig_Back_Combo_{}_event_{}.hepmc'.format(numEvents,dt_string)
     return name
 
 # ============================================================================================
