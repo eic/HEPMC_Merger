@@ -74,6 +74,8 @@ def merger(one_background_particle,Int_Window,sig_cont,back_cont):
                 production_vertex=particle.production_vertex.id
                 sig_vertices[abs(production_vertex)-1].add_particle_out(p1)
                 combo_cont[i].add_particle(p1)
+            else:
+                combo_cont[i].add_particle(p1)
             # Adds particles with an end vertex to their end vertices
             if particle.end_vertex:
                 end_vertex = particle.end_vertex.id
@@ -117,6 +119,8 @@ def merger(one_background_particle,Int_Window,sig_cont,back_cont):
                 if particle.production_vertex.id < 0:
                     production_vertex = particle.production_vertex.id
                     back_vertices[abs(production_vertex)-1].add_particle_out(p1)
+                    combo_cont[i].add_particle(p1)
+                else:
                     combo_cont[i].add_particle(p1)
                 # Adds particles with an end vertex to their end vertices
                 if particle.end_vertex:     
