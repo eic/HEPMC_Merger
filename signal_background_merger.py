@@ -58,7 +58,7 @@ class signal_background_merger:
         parser.add_argument('-o','--outputFile', default='',
                             help='Specify the output file name. By default it will be auto-generated.')
 
-        parser.add_argument('-w','--intWindow', type=float, default=2000.0,
+        parser.add_argument('-w','--intWindow', type=float, default=100.0,
                             help='Length of the integration window in nanoseconds. Default is 2000.')
         parser.add_argument('-N','--nSlices', type=int, default=-1,
                             help='Number of sampled time slices ("events"). Default is 10. If set to -1, all events in the signal file will be used and background files cycled as needed.')
@@ -143,7 +143,7 @@ class signal_background_merger:
                     print ( "Finished all requested slices." )
                     break
                 # if  i % 10000 == 0 : print('Working on slice {}'.format( i+1 ))
-                if  i % 100 == 0 : print('Working on slice {}'.format( i+1 ))
+                if  i % 1 == 0 : print('Working on slice {}'.format( i+1 ))
                 hepSlice = self.mergeSlice( i )
                 ### Arrgh, GenEvent==None throws an exception
                 try : 
@@ -159,7 +159,6 @@ class signal_background_merger:
 
 
         # Clean up, close all input files
-        
         sys.exit()
     
     # ============================================================================================
@@ -177,6 +176,7 @@ class signal_background_merger:
         # For the signal only, we keep frequency even if it's 0
         if signal :
             self.sigDict[fileName] = [ File, freq ]
+            return
             
         if freq<=0 :
             # file has its own weights
@@ -204,100 +204,14 @@ class signal_background_merger:
         for fileName in self.freqDict :
             hepSlice = self.addFreqEvents( fileName, hepSlice )
 
-            
+        for fileName in self.weightDict :
+            hepSlice = self.addWeightedEvents( fileName, hepSlice )
 
         return hepSlice
-        
-
-
-    # If files are provided with variable number of events, run as many events as events are in the smallest file
-        # i here are events
-        for i in range(min(lengths)):
-            combo_cont.append(pyhepmc.GenEvent(pyhepmc.Units.GEV, pyhepmc.Units.MM))
-            
-            # -----------------------------------------------------
-            # SIGNALS
-            
-            # Stores the vertices of the event inside a vertex container. These vertices are in increasing order so we can index them with [abs(vertex_id)-1]
-            for vertex in sig_cont[i].vertices:
-                position=vertex.position
-                #if we are shifting the event in time uses the random time generator and adds this time to the position four vector for the vertex
-                if Int_Window > 0:
-                    position=position+pyhepmc.FourVector(x=0,y=0,z=0,t=sig_time_shift)
-                v1=pyhepmc.GenVertex(position)
-                sig_vertices.append(v1)
-            
-            # copies the particles and attaches them to their corresponding vertices
-            for particle in sig_cont[i].particles:
-                momentum = particle.momentum
-                status = particle.status
-                pid = particle.pid
-                
-                # pyhepmc.GenParticle(momentum(px,py,pz,e), pdgid, status)
-                p1 = pyhepmc.GenParticle(momentum, pid, status)
-                p1.generated_mass = particle.generated_mass
-                sig_particles.append(p1)
-                # since the beam particles do not have a production vertex they cannot be attached to a production vertex
-                if particle.production_vertex.id < 0:
-                    production_vertex=particle.production_vertex.id
-                    sig_vertices[abs(production_vertex)-1].add_particle_out(p1)
-                    combo_cont[i].add_particle(p1)
-                # Adds particles with an end vertex to their end vertices
-                if particle.end_vertex:
-                    end_vertex = particle.end_vertex.id
-                    sig_vertices[abs(end_vertex)-1].add_particle_in(p1)
-
-            # Adds the vertices with the attached particles to the event
-            for vertex in sig_vertices:
-                combo_cont[i].add_vertex(vertex)
-        
-            # -----------------------------------------------------
-            # BACKGROUNDS
-            # Loop over different background input files
-            for b in range(len(back_cont)):
-                back_particles, back_vertices = [], []
-
-                # Standard use except for SR backgrounds. Will only shift the background event when this conditional is triggered.
-                if one_background_particle:
-                    #time to shift each background vertex
-                    back_time_shift = c_light*(Int_Window*rd.random())
-
-                for vertex in back_cont[b][i].vertices:
-                    position=vertex.position
-                    # When the background event has many particles separated in time, like SR backgrounds, trigger this coniditional by changing the one_background_particle to False
-                    if one_background_particle == False:
-                        back_time_shift = c_light*(Int_Window*rd.random())
-                    position = position+pyhepmc.FourVector(x=0,y=0,z=0,t=back_time_shift)
-                    v1 = pyhepmc.GenVertex(position)
-                    back_vertices.append(v1)
-                    
-                # copies the particles and attaches them to their corresponding vertices
-                for particle in back_cont[b][i].particles:
-                    momentum = particle.momentum
-                    status = particle.status
-                    pid = particle.pid
-
-                    # pyhepmc.GenParticle(momentum(px,py,pz,e), pdgid, status)
-                    p1 = pyhepmc.GenParticle(momentum, pid, status)
-                    p1.generated_mass = particle.generated_mass
-                    back_particles.append(p1)
-                    # since the beam particles do not have a production vertex they cannot be attached to a production vertex
-                    if particle.production_vertex.id < 0:
-                        production_vertex = particle.production_vertex.id
-                        back_vertices[abs(production_vertex)-1].add_particle_out(p1)
-                        combo_cont[i].add_particle(p1)
-                    # Adds particles with an end vertex to their end vertices
-                    if particle.end_vertex:     
-                        end_vertex = particle.end_vertex.id
-                        back_vertices[abs(end_vertex)-1].add_particle_in(p1)
-                # Adds the vertices with the attached particles to the event        
-                for vertex in back_vertices:
-                    combo_cont[i].add_vertex(vertex)
-        return combo_cont
 
     # ============================================================================================
     def addFreqEvents( self, fileName, hepSlice, signal=False ):
-        """Handles the signal as well as frequency=style backgrounds"""
+        """Handles the signal as well as frequency-style backgrounds"""
 
         if signal :
             File, Freq = self.sigDict[fileName]
@@ -329,15 +243,15 @@ class signal_background_merger:
         # Insert events at all specified locations
         for Time in slice :
             ### Arrgh, GenEvent==None throws an exception
+            inevt = File.read()
             try : 
-                inevt = File.read()
                 if inevt==None :
                     if signal :
                         # Exhausted signal events
                         raise EOFError
                     else :
                         # background file reached its end, reset to the start
-                        print("Cycling bach to the start of ", fileName )
+                        print("Cycling back to the start of ", fileName )
                         File.close()
                         File=pyhepmc.io.ReaderAscii(fileName)
                         # also update the dictionary
@@ -383,6 +297,91 @@ class signal_background_merger:
 
         return hepSlice
         
+    # ============================================================================================
+    def addWeightedEvents( self, fileName, hepSlice, signal=False ):
+        """Handles weighted backgrounds"""
+
+        File = self.weightDict[fileName]
+
+        c_light  = 299.792458 # speed of light = 299.792458 mm/ns to get mm
+        squash = self.args.squashTime
+        intTime=self.args.intWindow
+
+        # from https://github.com/eic/Synchrotron_Radiation_event_generator
+        integrated_so_far = 0.
+        while True : 
+            # get an event
+            inevt = File.read()
+            try : 
+                if inevt==None :
+                    # background file reached its end, reset to the start
+                    print("Cycling back to the start of ", fileName )
+                    File.close()
+                    File=pyhepmc.io.ReaderAscii(fileName)
+                    # also update the dictionary
+                    self.weightDict[fileName] = File
+                    inevt = File.read()
+            except TypeError as e:
+                pass
+
+            weight = inevt.weight()
+            # print (inevt.run_info)
+
+            if weight<1e-1 :
+                print('hello')
+                continue
+
+            # integration time is measured in ns, the weights in 1/s
+            # this should be 1e-9 !!! But only 1e-8 gives the correct answer of <photons> = 238 for 100 ns slices
+            # I checked,
+            # <weight> = 2354880523 Hz
+            # 1/<weight> = 0.424649994 nanoseconds = 4.24649994e-10 seconds
+            # 100 / 0.424649994 = 235 # only a subset, hence 235 not 238
+            # 100 / (1/(2354880523 * 1e-9)) should be right, and yet...
+            weight *= 1e-8
+            integrated_so_far += 1./weight
+            print(1./weight, "  ", integrated_so_far, "  X", intTime)
+            if integrated_so_far > intTime : # or ">="? shouldn't matter
+                break
+
+            particles, vertices = [], []
+            # Stores the vertices of the event inside a vertex container. These vertices are in increasing order so we can index them with [abs(vertex_id)-1]
+            for vertex in inevt.vertices:
+                position=vertex.position
+                # assume these are randomly distributed through the time window
+                if not squash :
+                    Time = self.rng.uniform(0,intTime)
+                    # Unit conversion
+                    TimeHepmc = c_light*Time
+                    position=position+pyhepmc.FourVector(x=0,y=0,z=0,t=TimeHepmc)
+                v1=pyhepmc.GenVertex(position)
+                vertices.append(v1)
+            
+            # copies the particles and attaches them to their corresponding vertices
+            for particle in inevt.particles:
+                # no copy/clone operator...
+                momentum, status, pid = particle.momentum, particle.status, particle.pid                
+                p1 = pyhepmc.GenParticle(momentum=momentum, pid=pid, status=status)
+                p1.generated_mass = particle.generated_mass
+                particles.append(p1)
+                
+                # since the beam particles do not have a production vertex they cannot be attached to a production vertex
+                if particle.production_vertex.id < 0:
+                    production_vertex=particle.production_vertex.id
+                    vertices[abs(production_vertex)-1].add_particle_out(p1)
+                    hepSlice.add_particle(p1)
+                    
+                # Adds particles with an end vertex to their end vertices
+                if particle.end_vertex:
+                    end_vertex = particle.end_vertex.id
+                    vertices[abs(end_vertex)-1].add_particle_in(p1)
+
+            # Adds the vertices with the attached particles to the event
+            for vertex in vertices:
+                hepSlice.add_vertex(vertex)
+
+        return hepSlice
+
     # ============================================================================================
     def poissonTimes( self, mu, endTime ):
         """Return an np.array of poisson-distributed times."""
