@@ -111,21 +111,6 @@ class signal_background_merger:
     def merge( self ):
         """Main method to steer the merging."""
 
-        # First, create a signal timeline
-        sigFreq=self.args.signalFreq
-        intTime=self.args.intWindow
-        nSlices=self.args.nSlices
-        endTime=nSlices*intTime
-        if sigFreq==0:
-            # one signal event uniformly distributed inside every time-slice
-            tsig = np.array([ i*intTime + self.rng.uniform(0,intTime) for i in range (0, nSlices) ])
-        else:
-            # Generate a stream of poisson-distributed times to place signal events
-            tsig=self.poissonTimes( sigFreq, endTime )
-
-        # Split into chunks, array of arrays of time slices.
-        sigChunk = self.chunkAt ( tsig, delta=intTime )
-
         # Open signal file
         try :
             sigFile=pyhepmc.io.ReaderAscii(self.args.signalFile) 
@@ -133,17 +118,14 @@ class signal_background_merger:
             print ('Opening files failed: %s' % e.strerror)
             sys.exit()
 
-        # bundle it all up
-        self.sigBundle = [ sigFile, sigFreq, sigChunk ]
-
-        # Repeat for BG files, then sort them into frequency or weight type
-        # The signal should maybe be handled nby the same method but it's sufficiently special
-        # that keeping it separate and repetitive is easier for now
+        # Open input file readers, group them with the associated frequency,
+        # then sort them into signal, frequency bg, or weight type bg
         self.freqBundles=[]
         self.weightBundles=[]
-        self.bundleUp ( self.args.bg1File, self.args.bg1Freq )
-        self.bundleUp ( self.args.bg2File, self.args.bg2Freq )
-        self.bundleUp ( self.args.bg3File, self.args.bg3Freq )
+        self.makeBundles ( self.args.signalFile, self.args.signalFreq, signal=True )
+        self.makeBundles ( self.args.bg1File, self.args.bg1Freq )
+        self.makeBundles ( self.args.bg2File, self.args.bg2Freq )
+        self.makeBundles ( self.args.bg3File, self.args.bg3Freq )
         
         # Open the output file
         if self.args.outputFile != "" :
@@ -151,7 +133,8 @@ class signal_background_merger:
         else :
             outputFileName = self.nameGen()
 
-        # # Process and write
+        # Process and write
+        nSlices=self.args.nSlices
         with WriterAscii(outputFileName) as f:
             i=0
             while True :
@@ -178,118 +161,50 @@ class signal_background_merger:
         sys.exit()
     
     # ============================================================================================
-    def poissonTimes( self, mu, endTime ):
-        """Return an np.array of poisson-distributed times."""
-        #Exponential distribution describes the time between poisson. We could start with an array of expected length
-        #and then cut or fill as needed. Not very readable for very little gain.
-        t = 0
-        ret=np.array([])
-        while True :
-            delt = self.rng.exponential( mu )
-            t = t + delt
-            if t >= endTime :
-                break
-            ret = np.append(ret,t)
-        return ret
-
-    # ============================================================================================
-    def chunkAt( self, input, delta):
-        """Split a sorted array at fixed intervals"""
-        ret=[]
-        if input.size==0 : return np.array(ret)
-        t=0
-        while t<input[-1] :
-            chunk=[ ctime for ctime in input if ctime >= t and ctime < t+delta ] # replace with a while loop if this is too slow
-            t = t + delta
-            ret.append( chunk)
-        return np.array(ret,dtype=object)
-
-    # ============================================================================================
-    def bundleUp( self, fileName, freq ):
+    def makeBundles( self, fileName, freq, signal=False ):
         """Create background timeline chunks, open input file, sort into frequency or weight type"""
-        intTime=self.args.intWindow
-        nSlices=self.args.nSlices
-        endTime=nSlices*intTime
-
         if fileName == "" : return
 
         try :
-            # Should use bgFile=pyhepmc.open(fileName) but that doesn't currently work
-            bgFile=pyhepmc.io.ReaderAscii(fileName)
+            # Should use File=pyhepmc.open(fileName) but that doesn't currently work
+            File=pyhepmc.io.ReaderAscii(fileName)
         except IOError as e:
-            print ('Opening files failed: %s' % e.strerror)
+            print ('Opening {} failed: {}', fileName, e.strerror)
             sys.exit()
+
+        if signal :
+            bundle = [ File, freq ]
+            self.sigBundle = bundle
 
         if freq<=0 :
             # file has its own weights, nothing else to do
-            self.weightBundles.append(bgFile)
+            self.weightBundles.append(File)
             return
 
-        # Create poisson timeline and chunk it
-        t = self.poissonTimes( freq, endTime )
-
-        # Split into chunks, arrays of arrays of time slices
-        bgChunk = self.chunkAt ( t, delta=intTime )
-
-        # bundle up
-        bundle = [ bgFile, freq, bgChunk ]
+        bundle = [ File, freq ]
         self.freqBundles.append(bundle)
 
         return
 
     # ============================================================================================
     def mergeSlice(self, i):
-    
-        c_light  = 299.792458 # speed of light = 299.792458 mm/ns to get mm
-        squash = self.args.squashTime
-
+        """Arrange the composition of an individual time slice"""
+        
         hepSlice = pyhepmc.GenEvent(pyhepmc.Units.GEV, pyhepmc.Units.MM)
         
-        # Get the current signal slice
-        sigFile, sigFreq, sigChunk = self.sigBundle
-        slice = sigChunk[i]
+        # Signal and frequency background are handled very similarly,
+        # handle them in one method and just ise a flag for what little is special
+        try :
+            hepSlice = self.addFreqEvents( self.sigBundle, hepSlice, signal=True )
+        except EOFError :
+            return
+        
+        # Treat frequency backgrounds very similarly 
+        for freqBundle in self.freqBundles :
+            freqFile, freqFreq = freqBundle
+            hepSlice = self.addFreqEvents( freqBundle, hepSlice )
 
-        # Insert signal events at all specified locations
-        sig_particles, sig_vertices = [], []
-        for sigTime in slice :
-            ### Arrgh, GenEvent==None throws an exception
-            try : 
-                sig = sigFile.read()
-                if sig==None : return
-            except TypeError as e:
-                pass # just need to suppress the error
-            sigTimeHepmc = c_light*sigTime
-
-            # Stores the vertices of the event inside a vertex container. These vertices are in increasing order so we can index them with [abs(vertex_id)-1]
-            for vertex in sig.vertices:
-                position=vertex.position
-                if not squash:
-                    position=position+pyhepmc.FourVector(x=0,y=0,z=0,t=sigTimeHepmc)
-                v1=pyhepmc.GenVertex(position)
-                sig_vertices.append(v1)
             
-            # copies the particles and attaches them to their corresponding vertices
-            for particle in sig.particles:
-                # no copy/clone operator...
-                momentum, status, pid = particle.momentum, particle.status, particle.pid                
-                p1 = pyhepmc.GenParticle(momentum=momentum, pid=pid, status=status)
-                p1.generated_mass = particle.generated_mass
-                sig_particles.append(p1)
-                
-                # since the beam particles do not have a production vertex they cannot be attached to a production vertex
-                if particle.production_vertex.id < 0:
-                    production_vertex=particle.production_vertex.id
-                    sig_vertices[abs(production_vertex)-1].add_particle_out(p1)
-                    hepSlice.add_particle(p1)
-                # Adds particles with an end vertex to their end vertices
-                if particle.end_vertex:
-                    end_vertex = particle.end_vertex.id
-                    sig_vertices[abs(end_vertex)-1].add_particle_in(p1)
-
-            # Adds the vertices with the attached particles to the event
-            for vertex in sig_vertices:
-                hepSlice.add_vertex(vertex)
-
 
         return hepSlice
         
@@ -381,6 +296,101 @@ class signal_background_merger:
         return combo_cont
 
     # ============================================================================================
+    def addFreqEvents( self, Bundle, hepSlice, signal=False ):
+        """Handles the signal as well as frequency=style backgrounds"""
+        
+        File, Freq = Bundle
+        c_light  = 299.792458 # speed of light = 299.792458 mm/ns to get mm
+        squash = self.args.squashTime
+
+        # First, create a timeline
+        intTime=self.args.intWindow
+        # this could be offset by iSlice * intTime for continuous time throughout the file
+
+        # Signals can be different
+        if Freq==0:
+            if not signal :
+                print( "frequency can't be 0 for background files" )
+                sys.exit()
+            # exactly one signal event, at an arbigtrary point
+            slice = np.array([ self.rng.uniform(0,intTime) ])
+        else:
+            # Generate poisson-distributed times to place events
+            slice = self.poissonTimes( Freq, intTime )
+
+        print ( " !!! Adding {} events".format(slice.size) )
+        if slice.size == 0 : return hepSlice
+
+        # Insert events at all specified locations
+        for Time in slice :
+            ### Arrgh, GenEvent==None throws an exception
+            try : 
+                inevt = File.read()
+                if inevt==None :
+                    if signal :
+                        # Exhausted signal events
+                        raise EOFError
+                    else :
+                        # background file reached its end, reset to the start
+                        ## TODO: do that...
+                        print("hello bg error")
+                        raise EOFError
+            except TypeError as e:
+                pass # just need to suppress the error
+
+            # Unit conversion
+            TimeHepmc = c_light*Time
+
+            particles, vertices = [], []
+            # Stores the vertices of the event inside a vertex container. These vertices are in increasing order so we can index them with [abs(vertex_id)-1]
+            for vertex in inevt.vertices:
+                position=vertex.position
+                if not squash:
+                    position=position+pyhepmc.FourVector(x=0,y=0,z=0,t=TimeHepmc)
+                v1=pyhepmc.GenVertex(position)
+                vertices.append(v1)
+            
+            # copies the particles and attaches them to their corresponding vertices
+            for particle in inevt.particles:
+                # no copy/clone operator...
+                momentum, status, pid = particle.momentum, particle.status, particle.pid                
+                p1 = pyhepmc.GenParticle(momentum=momentum, pid=pid, status=status)
+                p1.generated_mass = particle.generated_mass
+                particles.append(p1)
+                
+                # since the beam particles do not have a production vertex they cannot be attached to a production vertex
+                if particle.production_vertex.id < 0:
+                    production_vertex=particle.production_vertex.id
+                    vertices[abs(production_vertex)-1].add_particle_out(p1)
+                    hepSlice.add_particle(p1)
+                    
+                # Adds particles with an end vertex to their end vertices
+                if particle.end_vertex:
+                    end_vertex = particle.end_vertex.id
+                    vertices[abs(end_vertex)-1].add_particle_in(p1)
+
+            # Adds the vertices with the attached particles to the event
+            for vertex in vertices:
+                hepSlice.add_vertex(vertex)
+
+        return hepSlice
+        
+    # ============================================================================================
+    def poissonTimes( self, mu, endTime ):
+        """Return an np.array of poisson-distributed times."""
+        #Exponential distribution describes the time between poisson. We could start with an array of expected length
+        #and then cut or fill as needed. Not very readable for very little gain.
+        t = 0
+        ret=np.array([])
+        while True :
+            delt = self.rng.exponential( mu )
+            t = t + delt
+            if t >= endTime :
+                break
+            ret = np.append(ret,t)
+        return ret
+    
+    # ============================================================================================
     def nameGen(self):
         # # datetime object containing current date and time
         # now = datetime.now()
@@ -391,8 +401,7 @@ class signal_background_merger:
             name = name.replace(".hepmc","_n_{}.hepmc".format(self.args.nSlices))
             
         name = "bgmerged_"+name
-        return name
-        
+        return name        
 
     # ============================================================================================
     def fileWriter(combo_cont):
