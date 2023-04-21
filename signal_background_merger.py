@@ -33,23 +33,23 @@ class signal_background_merger:
         """Handle the command line tedium"""
         parser = argparse.ArgumentParser(description='Merge signal events with up to three background sources.')
         
-        parser.add_argument('-i','--signalFile', default='dummy_signal.hepmc',
+        parser.add_argument('-i','--signalFile', default='small_ep_noradcor.10x100_q2_10_100_run001.hepmc',
                             help='Name of the HEPMC file with the signal events')
         parser.add_argument('-sf','--signalFreq', type=float, default=0.0,
                             help='Poisson-mu of the signal frequency in ns. Default is 0 to have exactly one signal event per slice. Set to the estimated DIS to randomize.')
 
     
-        parser.add_argument('-b1','--bg1File', default='dummy_bg1.hepmc',
+        parser.add_argument('-b1','--bg1File', default='small_hgas_100GeV_HiAc_25mrad.Asciiv3.hepmc',
                             help='Name of the first HEPMC file with background events')
         parser.add_argument('-f1','--bg1Freq', type=float, default=1852.0,
                             help='Poisson-mu of the first background frequency in ns. Default is the estimated DIS frequency of 1852 ns. Set to 0 to use the weights in the corresponding input file.')
 
-        parser.add_argument('-b2','--bg2File', default='dummy_bg2.hepmc',
+        parser.add_argument('-b2','--bg2File', default='small_beam_gas_ep_10GeV_foam_emin10keV_vtx.hepmc',
                             help='Name of the second HEPMC file with background events')
         parser.add_argument('-f2','--bg2Freq', type=float, default=1852.0,
                             help='Poisson-mu of the second background frequency in ns. Default is the estimated DIS frequency of 1852 ns. Set to 0 to use the weights in the corresponding input file.')
 
-        parser.add_argument('-b3','--bg3File', default='SR_out_single.hepmc',
+        parser.add_argument('-b3','--bg3File', default='small_SR_single_2.5A_10GeV.hepmc',
                             help='Name of the third HEPMC file with background events')
         parser.add_argument('-f3','--bg3Freq', type=float, default=0,
                             help='Poisson-mu of the third background frequency in ns. Default is 0 to use the weights in the corresponding input file. Set to a value >0 to specify a poisson mu instead.')
@@ -60,7 +60,7 @@ class signal_background_merger:
 
         parser.add_argument('-w','--intWindow', type=float, default=2000.0,
                             help='Length of the integration window in nanoseconds. Default is 2000.')
-        parser.add_argument('-N','--nSlices', type=int, default=10,
+        parser.add_argument('-N','--nSlices', type=int, default=-1,
                             help='Number of sampled time slices ("events"). Default is 10. If set to -1, all events in the signal file will be used and background files cycled as needed.')
         parser.add_argument('--squashTime', action='store_true',
                             help='Integration is performed but no time information is associated to vertices.')
@@ -120,13 +120,14 @@ class signal_background_merger:
 
         # Open input file readers, group them with the associated frequency,
         # then sort them into signal, frequency bg, or weight type bg
-        self.freqBundles=[]
-        self.weightBundles=[]
-        self.makeBundles ( self.args.signalFile, self.args.signalFreq, signal=True )
-        self.makeBundles ( self.args.bg1File, self.args.bg1Freq )
-        self.makeBundles ( self.args.bg2File, self.args.bg2Freq )
-        self.makeBundles ( self.args.bg3File, self.args.bg3Freq )
-        
+        self.sigDict=dict()
+        self.freqDict=dict()
+        self.weightDict=dict()
+        self.makeDicts ( self.args.signalFile, self.args.signalFreq, signal=True )
+        self.makeDicts ( self.args.bg1File, self.args.bg1Freq )
+        self.makeDicts ( self.args.bg2File, self.args.bg2Freq )
+        self.makeDicts ( self.args.bg3File, self.args.bg3Freq )
+
         # Open the output file
         if self.args.outputFile != "" :
             outputFileName = self.args.outputFile
@@ -141,7 +142,8 @@ class signal_background_merger:
                 if (i==nSlices) :
                     print ( "Finished all requested slices." )
                     break
-                if  i % 10000 == 0 : print('Working on slice {}'.format( i+1 ))
+                # if  i % 10000 == 0 : print('Working on slice {}'.format( i+1 ))
+                if  i % 100 == 0 : print('Working on slice {}'.format( i+1 ))
                 hepSlice = self.mergeSlice( i )
                 ### Arrgh, GenEvent==None throws an exception
                 try : 
@@ -161,7 +163,7 @@ class signal_background_merger:
         sys.exit()
     
     # ============================================================================================
-    def makeBundles( self, fileName, freq, signal=False ):
+    def makeDicts( self, fileName, freq, signal=False ):
         """Create background timeline chunks, open input file, sort into frequency or weight type"""
         if fileName == "" : return
 
@@ -171,18 +173,17 @@ class signal_background_merger:
         except IOError as e:
             print ('Opening {} failed: {}', fileName, e.strerror)
             sys.exit()
-
+            
+        # For the signal only, we keep frequency even if it's 0
         if signal :
-            bundle = [ File, freq ]
-            self.sigBundle = bundle
-
+            self.sigDict[fileName] = [ File, freq ]
+            
         if freq<=0 :
-            # file has its own weights, nothing else to do
-            self.weightBundles.append(File)
+            # file has its own weights
+            self.weightDict[fileName]=File
             return
 
-        bundle = [ File, freq ]
-        self.freqBundles.append(bundle)
+        self.freqDict[fileName] = [ File, freq ]
 
         return
 
@@ -193,16 +194,15 @@ class signal_background_merger:
         hepSlice = pyhepmc.GenEvent(pyhepmc.Units.GEV, pyhepmc.Units.MM)
         
         # Signal and frequency background are handled very similarly,
-        # handle them in one method and just ise a flag for what little is special
+        # handle them in one method and just use a flag for what little is special
         try :
-            hepSlice = self.addFreqEvents( self.sigBundle, hepSlice, signal=True )
+            hepSlice = self.addFreqEvents( self.args.signalFile, hepSlice, True )
         except EOFError :
             return
         
         # Treat frequency backgrounds very similarly 
-        for freqBundle in self.freqBundles :
-            freqFile, freqFreq = freqBundle
-            hepSlice = self.addFreqEvents( freqBundle, hepSlice )
+        for fileName in self.freqDict :
+            hepSlice = self.addFreqEvents( fileName, hepSlice )
 
             
 
@@ -296,10 +296,15 @@ class signal_background_merger:
         return combo_cont
 
     # ============================================================================================
-    def addFreqEvents( self, Bundle, hepSlice, signal=False ):
+    def addFreqEvents( self, fileName, hepSlice, signal=False ):
         """Handles the signal as well as frequency=style backgrounds"""
-        
-        File, Freq = Bundle
+
+        if signal :
+            File, Freq = self.sigDict[fileName]
+        else :
+            File, Freq = self.freqDict[fileName]
+
+
         c_light  = 299.792458 # speed of light = 299.792458 mm/ns to get mm
         squash = self.args.squashTime
 
@@ -318,7 +323,7 @@ class signal_background_merger:
             # Generate poisson-distributed times to place events
             slice = self.poissonTimes( Freq, intTime )
 
-        print ( " !!! Adding {} events".format(slice.size) )
+        # print ( " !!! Adding {} events".format(slice.size) )
         if slice.size == 0 : return hepSlice
 
         # Insert events at all specified locations
@@ -332,9 +337,12 @@ class signal_background_merger:
                         raise EOFError
                     else :
                         # background file reached its end, reset to the start
-                        ## TODO: do that...
-                        print("hello bg error")
-                        raise EOFError
+                        print("Cycling bach to the start of ", fileName )
+                        File.close()
+                        File=pyhepmc.io.ReaderAscii(fileName)
+                        # also update the dictionary
+                        self.freqDict[fileName] = [File, Freq]
+                        inevt = File.read()
             except TypeError as e:
                 pass # just need to suppress the error
 
