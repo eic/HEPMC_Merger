@@ -1,12 +1,16 @@
 import pyhepmc
 from pyhepmc.io import WriterAscii
-import random as rd
-from datetime import datetime
 import argparse
 
 import numpy as np
+import pandas as pd
+
+from datetime import datetime
+from operator import itemgetter
 import time
 import sys
+
+import psutil
 
 # =============================================================
 class signal_background_merger:
@@ -39,19 +43,19 @@ class signal_background_merger:
                             help='Poisson-mu of the signal frequency in ns. Default is 0 to have exactly one signal event per slice. Set to the estimated DIS to randomize.')
 
     
-        parser.add_argument('-b1','--bg1File', default='small_hgas_100GeV_HiAc_25mrad.Asciiv3.hepmc',
+        parser.add_argument('-bg1','--bg1File', default='small_hgas_100GeV_HiAc_25mrad.Asciiv3.hepmc',
                             help='Name of the first HEPMC file with background events')
-        parser.add_argument('-f1','--bg1Freq', type=float, default=1852.0,
+        parser.add_argument('-bf1','--bg1Freq', type=float, default=1852.0,
                             help='Poisson-mu of the first background frequency in ns. Default is the estimated DIS frequency of 1852 ns. Set to 0 to use the weights in the corresponding input file.')
 
-        parser.add_argument('-b2','--bg2File', default='small_beam_gas_ep_10GeV_foam_emin10keV_vtx.hepmc',
+        parser.add_argument('-bg2','--bg2File', default='small_beam_gas_ep_10GeV_foam_emin10keV_vtx.hepmc',
                             help='Name of the second HEPMC file with background events')
-        parser.add_argument('-f2','--bg2Freq', type=float, default=1852.0,
+        parser.add_argument('-bf2','--bg2Freq', type=float, default=1852.0,
                             help='Poisson-mu of the second background frequency in ns. Default is the estimated DIS frequency of 1852 ns. Set to 0 to use the weights in the corresponding input file.')
 
-        parser.add_argument('-b3','--bg3File', default='small_SR_single_2.5A_10GeV.hepmc',
+        parser.add_argument('-bg3','--bg3File', default='small_SR_single_2.5A_10GeV.hepmc',
                             help='Name of the third HEPMC file with background events')
-        parser.add_argument('-f3','--bg3Freq', type=float, default=0,
+        parser.add_argument('-bf3','--bg3Freq', type=float, default=0,
                             help='Poisson-mu of the third background frequency in ns. Default is 0 to use the weights in the corresponding input file. Set to a value >0 to specify a poisson mu instead.')
 
 
@@ -68,6 +72,8 @@ class signal_background_merger:
         parser.add_argument('--rngSeed', action='store',type=int, default=None,
                             help='Random seed, default is None')
 
+        parser.add_argument('-v','--verbose', action='store_true',
+                            help='Display details for every slice.')
         self.args = parser.parse_args()
 
     # ============================================================================================
@@ -111,9 +117,10 @@ class signal_background_merger:
     def merge( self ):
         """Main method to steer the merging."""
 
+        t0 = time.time()
         # Open signal file
         try :
-            sigFile=pyhepmc.io.ReaderAscii(self.args.signalFile) 
+            sigFile=pyhepmc.io.ReaderAscii(self.args.signalFile)
         except IOError as e:
             print ('Opening files failed: %s' % e.strerror)
             sys.exit()
@@ -134,16 +141,23 @@ class signal_background_merger:
         else :
             outputFileName = self.nameGen()
 
+        t1 = time.time()        
+        print('Initiation time:',np.round((t1-t0)/60.,2),'min')
+                    
         # Process and write
         nSlices=self.args.nSlices
+
+        print()
+        print('==================================================================')
+        print()
+        i=0
         with WriterAscii(outputFileName) as f:
-            i=0
             while True :
                 if (i==nSlices) :
                     print ( "Finished all requested slices." )
                     break
                 # if  i % 10000 == 0 : print('Working on slice {}'.format( i+1 ))
-                if  i % 1 == 0 : print('Working on slice {}'.format( i+1 ))
+                if  i % 100 == 0 or self.args.verbose : self.squawk(i)
                 hepSlice = self.mergeSlice( i )
                 ### Arrgh, GenEvent==None throws an exception
                 try : 
@@ -157,9 +171,19 @@ class signal_background_merger:
                 f.write_event(hepSlice)
                 i=i+1
 
+        t2 = time.time()
+        self.slicesDone=i
+        print('Slice loop time:',np.round((t2-t1)/60.,2),'min')
+        print(' -- ',np.round((t2-t1) / self.slicesDone ,3),'sec / slice')
+        
 
         # Clean up, close all input files
-        sys.exit()
+        File, Freq = self.sigDict[self.args.signalFile]
+        # File.close()
+        for fileName in self.freqDict :
+            File, Freq = self.sigDict[fileName]
+            File.close()
+
     
     # ============================================================================================
     def makeDicts( self, fileName, freq, signal=False ):
@@ -180,7 +204,22 @@ class signal_background_merger:
             
         if freq<=0 :
             # file has its own weights
-            self.weightDict[fileName]=File
+            # In this case, we will need to read in all events
+            # because we need the distribution to draw from them
+            print ( "Reading in all events from", fileName )
+            # remove events with 0 weight - note that this does change avgRate = <weight> (by a little)
+            container = [[event, event.weight()] for event in File if event.weight() > 0]
+            # sorting may help for lookup, sampling
+            container = sorted ( container, key=itemgetter(1) )            
+            File.close()
+            events  = np.array([ item[0] for item in container ])
+            weights = np.array([ item[1] for item in container ])
+            avgRate = np.average (weights) # I _think_ this is the total flux
+            avgRate *= 1e-9 # convert to 1/ns == GHz
+            print( "Average rate is", avgRate, "GHz")
+            # np.Generator.choice expects normalized probabilities
+            probs = weights / weights.sum()
+            self.weightDict[fileName]=[ events, probs, avgRate ]
             return
 
         self.freqDict[fileName] = [ File, freq ]
@@ -232,12 +271,12 @@ class signal_background_merger:
                 print( "frequency can't be 0 for background files" )
                 sys.exit()
             # exactly one signal event, at an arbigtrary point
-            slice = np.array([ self.rng.uniform(0,intTime) ])
+            slice = np.array([ self.rng.uniform(low=0, high=intTime) ])
         else:
             # Generate poisson-distributed times to place events
             slice = self.poissonTimes( Freq, intTime )
 
-        # print ( " !!! Adding {} events".format(slice.size) )
+        if self.args.verbose : print ( "Placing",slice.size,"events from", fileName )
         if slice.size == 0 : return hepSlice
 
         # Insert events at all specified locations
@@ -301,56 +340,36 @@ class signal_background_merger:
     def addWeightedEvents( self, fileName, hepSlice, signal=False ):
         """Handles weighted backgrounds"""
 
-        File = self.weightDict[fileName]
+        events, probs, avgRate = self.weightDict[fileName]
 
         c_light  = 299.792458 # speed of light = 299.792458 mm/ns to get mm
+        squash  = self.args.squashTime
+        intTime = self.args.intWindow
         squash = self.args.squashTime
-        intTime=self.args.intWindow
 
-        # from https://github.com/eic/Synchrotron_Radiation_event_generator
-        integrated_so_far = 0.
-        while True : 
-            # get an event
-            inevt = File.read()
-            try : 
-                if inevt==None :
-                    # background file reached its end, reset to the start
-                    print("Cycling back to the start of ", fileName )
-                    File.close()
-                    File=pyhepmc.io.ReaderAscii(fileName)
-                    # also update the dictionary
-                    self.weightDict[fileName] = File
-                    inevt = File.read()
-            except TypeError as e:
-                pass
+        # How many events? Assume Poisson distribution
+        nEvents = int( self.rng.exponential( intTime * avgRate ) )
+        if self.args.verbose : print ( "Placing",nEvents,"events from", fileName )
 
-            weight = inevt.weight()
-            # print (inevt.run_info)
+        # Get events 
+        toPlace = self.rng.choice( a=events, size=nEvents, p=probs, replace=True )
 
-            if weight<1e-1 :
-                print('hello')
-                continue
+        # Place at random times
+        if not squash :
+            times = list(self.rng.uniform(low=0, high=intTime, size=nEvents))        
 
-            # integration time is measured in ns, the weights in 1/s
-            # this should be 1e-9 !!! But only 1e-8 gives the correct answer of <photons> = 238 for 100 ns slices
-            # I checked,
-            # <weight> = 2354880523 Hz
-            # 1/<weight> = 0.424649994 nanoseconds = 4.24649994e-10 seconds
-            # 100 / 0.424649994 = 235 # only a subset, hence 235 not 238
-            # 100 / (1/(2354880523 * 1e-9)) should be right, and yet...
-            weight *= 1e-8
-            integrated_so_far += 1./weight
-            print(1./weight, "  ", integrated_so_far, "  X", intTime)
-            if integrated_so_far > intTime : # or ">="? shouldn't matter
-                break
+        for inevt in toPlace :
+            Time = 0
+            if not squash :
+                Time = times.pop()
 
+            # print ( " -- Placing at", time)
+            
             particles, vertices = [], []
             # Stores the vertices of the event inside a vertex container. These vertices are in increasing order so we can index them with [abs(vertex_id)-1]
             for vertex in inevt.vertices:
                 position=vertex.position
-                # assume these are randomly distributed through the time window
                 if not squash :
-                    Time = self.rng.uniform(0,intTime)
                     # Unit conversion
                     TimeHepmc = c_light*Time
                     position=position+pyhepmc.FourVector(x=0,y=0,z=0,t=TimeHepmc)
@@ -410,6 +429,10 @@ class signal_background_merger:
         name = "bgmerged_"+name
         return name        
 
+    def squawk(self,i) :
+        print('Working on slice {}'.format( i+1 ))
+        print('Resident Memory',psutil.Process().memory_info().rss / 1024 / 1024,"GB")
+    
     # ============================================================================================
     def fileWriter(combo_cont):
         numEvents=len(combo_cont)
@@ -430,6 +453,8 @@ if __name__ == '__main__':
     t0 = time.time()
     sbm = signal_background_merger()
     sbm.merge()
+    print()
+    print('==================================================================')
     print('Overall running time:',np.round((time.time()-t0)/60.,2),'min')
 
 
