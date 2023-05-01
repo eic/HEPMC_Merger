@@ -40,18 +40,18 @@ class signal_background_merger:
         parser.add_argument('-i','--signalFile', default='small_ep_noradcor.10x100_q2_10_100_run001.hepmc',
                             help='Name of the HEPMC file with the signal events')
         parser.add_argument('-sf','--signalFreq', type=float, default=0.0,
-                            help='Poisson-mu of the signal frequency in ns. Default is 0 to have exactly one signal event per slice. Set to the estimated DIS to randomize.')
+                            help='Poisson-mu of the signal frequency in ns. Default is 0 to have exactly one signal event per slice. Set to the estimated DIS rate to randomize.')
 
     
         parser.add_argument('-bg1','--bg1File', default='small_hgas_100GeV_HiAc_25mrad.Asciiv3.hepmc',
                             help='Name of the first HEPMC file with background events')
-        parser.add_argument('-bf1','--bg1Freq', type=float, default=1852.0,
-                            help='Poisson-mu of the first background frequency in ns. Default is the estimated DIS frequency of 1852 ns. Set to 0 to use the weights in the corresponding input file.')
+        parser.add_argument('-bf1','--bg1Freq', type=float, default=31347.0,
+                            help='Poisson-mu of the first background frequency in ns. Default is the estimated hadron gas rate at 10x100. Set to 0 to use the weights in the corresponding input file.')
 
         parser.add_argument('-bg2','--bg2File', default='small_beam_gas_ep_10GeV_foam_emin10keV_vtx.hepmc',
                             help='Name of the second HEPMC file with background events')
-        parser.add_argument('-bf2','--bg2Freq', type=float, default=1852.0,
-                            help='Poisson-mu of the second background frequency in ns. Default is the estimated DIS frequency of 1852 ns. Set to 0 to use the weights in the corresponding input file.')
+        parser.add_argument('-bf2','--bg2Freq', type=float, default=333.0,
+                            help='Poisson-mu of the second background frequency in ns. Default is the estimated electron  gas rate at 10x100. Set to 0 to use the weights in the corresponding input file.')
 
         parser.add_argument('-bg3','--bg3File', default='small_SR_single_2.5A_10GeV.hepmc',
                             help='Name of the third HEPMC file with background events')
@@ -181,7 +181,7 @@ class signal_background_merger:
         File, Freq = self.sigDict[self.args.signalFile]
         # File.close()
         for fileName in self.freqDict :
-            File, Freq = self.sigDict[fileName]
+            File, Freq = self.freqDict[fileName]
             File.close()
 
     
@@ -352,7 +352,7 @@ class signal_background_merger:
         if self.args.verbose : print ( "Placing",nEvents,"events from", fileName )
 
         # Get events 
-        toPlace = self.rng.choice( a=events, size=nEvents, p=probs, replace=True )
+        toPlace = self.rng.choice( a=events, size=nEvents, p=probs, replace=False )
 
         # Place at random times
         if not squash :
@@ -431,7 +431,7 @@ class signal_background_merger:
 
     def squawk(self,i) :
         print('Working on slice {}'.format( i+1 ))
-        print('Resident Memory',psutil.Process().memory_info().rss / 1024 / 1024,"GB")
+        print('Resident Memory',psutil.Process().memory_info().rss / 1024 / 1024,"MB")
     
     # ============================================================================================
     def fileWriter(combo_cont):
