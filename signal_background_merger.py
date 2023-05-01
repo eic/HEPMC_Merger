@@ -62,7 +62,7 @@ class signal_background_merger:
         parser.add_argument('-o','--outputFile', default='',
                             help='Specify the output file name. By default it will be auto-generated.')
 
-        parser.add_argument('-w','--intWindow', type=float, default=100.0,
+        parser.add_argument('-w','--intWindow', type=float, default=2000.0,
                             help='Length of the integration window in nanoseconds. Default is 2000.')
         parser.add_argument('-N','--nSlices', type=int, default=-1,
                             help='Number of sampled time slices ("events"). Default is 10. If set to -1, all events in the signal file will be used and background files cycled as needed.')
