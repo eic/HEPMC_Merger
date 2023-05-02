@@ -348,7 +348,13 @@ class signal_background_merger:
         squash = self.args.squashTime
 
         # How many events? Assume Poisson distribution
-        nEvents = int( self.rng.exponential( intTime * avgRate ) )
+        while True:
+            nEvents = int( self.rng.exponential( intTime * avgRate ) )
+            if nEvents > len(events) :
+                print("WARNING: Trying to place",nEvents,"events from", fileName,
+                      "but the file doesn't have enough. Rerolling, but this is not physical.")
+                continue
+            break
         if self.args.verbose : print ( "Placing",nEvents,"events from", fileName )
 
         # Get events 
