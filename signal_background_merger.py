@@ -120,7 +120,8 @@ class signal_background_merger:
         t0 = time.time()
         # Open signal file
         try :
-            sigFile=pyhepmc.io.ReaderAscii(self.args.signalFile)
+            # sigFile=pyhepmc.io.ReaderAscii(self.args.signalFile)
+            sigFile=pyhepmc.io.open(self.args.signalFile)
         except IOError as e:
             print ('Opening files failed: %s' % e.strerror)
             sys.exit()
@@ -192,7 +193,7 @@ class signal_background_merger:
 
         try :
             # Should use File=pyhepmc.open(fileName) but that doesn't currently work
-            File=pyhepmc.io.ReaderAscii(fileName)
+            File=pyhepmc.open(fileName)
         except IOError as e:
             print ('Opening {} failed: {}', fileName, e.strerror)
             sys.exit()
@@ -292,7 +293,8 @@ class signal_background_merger:
                         # background file reached its end, reset to the start
                         print("Cycling back to the start of ", fileName )
                         File.close()
-                        File=pyhepmc.io.ReaderAscii(fileName)
+                        # File=pyhepmc.io.ReaderAscii(fileName)
+                        File=pyhepmc.io.open(fileName)
                         # also update the dictionary
                         self.freqDict[fileName] = [File, Freq]
                         inevt = File.read()
