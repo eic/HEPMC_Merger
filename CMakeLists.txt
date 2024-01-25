@@ -22,6 +22,11 @@ find_package(HepMC3 3.2.6 REQUIRED HINTS ${HepMC3} ${HepMC3_DIR} )
 message ( "-- HepMC3 library found at ${HEPMC3_LIB}" )
 # message ( "-- HepMC3 headers found in ${HEPMC3_INCLUDE_DIR}" )
 
+
+#----------------------------------------------------------------------------
+# Find root, for hepmc.root format
+find_package(ROOT 6.20 CONFIG REQUIRED)
+
 #----------------------------------------------------------------------------
 set(sources ${PROJECT_SOURCE_DIR}/SignalBackgroundMerger.cpp )
 # file( headers )
@@ -31,7 +36,7 @@ set(sources ${PROJECT_SOURCE_DIR}/SignalBackgroundMerger.cpp )
 #
 add_executable(SignalBackgroundMerger ${sources})
 target_compile_features(SignalBackgroundMerger PUBLIC cxx_std_17)
-target_link_libraries(SignalBackgroundMerger ${HEPMC3_LIB} )
+target_link_libraries(SignalBackgroundMerger ROOT::Tree ROOT::RIO ROOT::Core HepMC3::HepMC3 HepMC3::rootIO )
 target_include_directories(SignalBackgroundMerger
   PRIVATE
   ${HEPMC3_INCLUDE_DIR}
