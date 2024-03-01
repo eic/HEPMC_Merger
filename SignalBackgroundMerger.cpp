@@ -10,6 +10,7 @@
 #include <stdexcept>
 #include <chrono>
 #include <cmath>
+#include <random>
 #include <sys/resource.h>
 
 #include <HepMC3/ReaderFactory.h>
@@ -60,7 +61,7 @@ public:
     makeDicts ( bg3File, bg3Freq );
 
     auto t1 = std::chrono::high_resolution_clock::now();
-    std::cout << "Initiation time: " << std::round(std::chrono::duration<double, std::chrono::minutes::period>(t1 - t0).count()) << " min" << std::endl;
+    std::cout << "Initiation time: " << std::round(std::chrono::duration<double, std::chrono::seconds::period>(t1 - t0).count()) << " sec" << std::endl;
     std::cout << "\n==================================================================\n" << std::endl;
 
   }
@@ -86,7 +87,6 @@ public:
       }
       hepSlice->set_event_number(i);
       f->write_event(*hepSlice);
-      i++;
     }
     std::cout << "Finished all requested slices." << std::endl;
 
@@ -123,6 +123,7 @@ public:
     
     args.add_argument("-sf", "--signalFreq")
       .default_value(0.0)
+      .scan<'g', double>()
       .help("Poisson-mu of the signal frequency in ns. Default is 0 to have exactly one signal event per slice. Set to the estimated DIS rate to randomize.");
     
     args.add_argument("-bg1", "--bg1File")
@@ -131,6 +132,7 @@ public:
     
     args.add_argument("-bf1", "--bg1Freq")
       .default_value(31347.0)
+      .scan<'g', double>()
       .help("Poisson-mu of the first background frequency in ns. Default is the estimated hadron gas rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
     
     args.add_argument("-bg2", "--bg2File")
@@ -139,6 +141,7 @@ public:
     
     args.add_argument("-bf2", "--bg2Freq")
       .default_value(333.0)
+      .scan<'g', double>()
       .help("Poisson-mu of the second background frequency in ns. Default is the estimated electron gas rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
     
     args.add_argument("-bg3", "--bg3File")
@@ -164,7 +167,8 @@ public:
     
     args.add_argument("-N", "--nSlices")
       .default_value(-1)
-      .help("Number of sampled time slices ('events'). Default is 10. If set to -1, all events in the signal file will be used and background files cycled as needed.");
+      .scan<'i', int>()
+      .help("Number of sampled time slices ('events'). Default is -1. If set to -1, all events in the signal file will be used and background files cycled as needed.");
     
     args.add_argument("--squashTime")
       .default_value(false)
@@ -220,7 +224,8 @@ public:
     std::cout << "** Brookhaven National Laboratory" << std::endl;
     std::cout << "*** formerly Lawrence Berkeley National Laboratory" << std::endl;
     std::cout << "\nFor more information, run \n./signal_background_merger --help" << std::endl;
-    
+
+    std::cout << "Number of Slices:" << nSlices << endl;
     std::string freqTerm = signalFreq > 0 ? std::to_string(signalFreq) + " ns" : "(one event per time slice)";
     std::cout << "Signal events file and frequency:\n";
     std::cout << "\t- " << signalFile << "\t" << freqTerm << "\n";
@@ -333,26 +338,29 @@ public:
   // ---------------------------------------------------------------------------
   void squawk(int i) {
     struct rusage r_usage;
+    // NOTE: Reported in kB on Linux, bytes in Mac/Darwin
+    // Could try to explicitly catch __linux__ as well
+    // Unclear in BSD, I've seen conflicting reports
+    float mbsize = 1024;
+#ifdef __MACH__
+    mbsize = 1024 * 1024;
+#endif
+  
     getrusage(RUSAGE_SELF, &r_usage);
-
+    
     std::cout << "Working on slice " << i + 1 << std::endl;
-    std::cout << "Resident Memory " << r_usage.ru_maxrss / 1024.0 << " MB" << std::endl;
+    std::cout << "Resident Memory " << r_usage.ru_maxrss / mbsize << " MB" << std::endl;
   }
   // ---------------------------------------------------------------------------
 
   std::unique_ptr<HepMC3::GenEvent> mergeSlice(int i) {
     auto hepSlice = std::make_unique<HepMC3::GenEvent>(HepMC3::Units::GEV, HepMC3::Units::MM);
     
-    // try {
-    //   hepSlice = addFreqEvents(args["signalFile"], hepSlice, true);
-    // } catch (std::ifstream::failure& e) {
-    //   std::cerr << "Error: " << e.what() << '\n';
-    //   return HepMC3::GenEvent();
-    // }
+    addFreqEvents(signalFile, hepSlice, true);
     
-    // for (const auto& fileName : freqDict) {
-    //   hepSlice = addFreqEvents(fileName.first, hepSlice);
-    // }
+    for (const auto& fileName : freqDict) {
+      addFreqEvents(fileName.first, hepSlice);
+    }
     
     // for (const auto& fileName : weightDict) {
     //   hepSlice = addWeightedEvents(fileName.first, hepSlice);
@@ -361,13 +369,214 @@ public:
     return hepSlice;
   };
 
-    // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
 
-    // ---------------------------------------------------------------------------
+  void addFreqEvents(std::string fileName, std::unique_ptr<HepMC3::GenEvent>& hepSlice, bool signal = false) {
+    double freq;
+    std::shared_ptr<HepMC3::Reader> adapter;
+    
+    if (signal) {
+      std::tie(adapter, freq) = sigDict[fileName];
+    } else {
+      std::tie(adapter, freq) = freqDict[fileName];
+    }
+    
+    // First, create a timeline
+    // Signals can be different
+    std::vector<double> slice;
+    std::uniform_real_distribution<> uni(0, intWindow);
+    if (freq == 0) {
+      if (!signal) {
+	std::cerr << "frequency can't be 0 for background files" << std::endl;
+	exit(1);
+      }
+      // exactly one signal event, at an arbitrary point
+      slice.push_back(uni(rng));
+    } else {
+      // Generate poisson-distributed times to place events
+      slice = poissonTimes(freq, intWindow);
+    }
+    
+    if ( verbose) std::cout << "Placing " << slice.size() << " events from " << fileName << std::endl;
+    if (slice.empty()) return;
+    
+    // Insert events at all specified locations
+    for (double time : slice) {
+      if(adapter->failed()) {
+	try{
+	  if (signal) {
+	    // Exhausted signal events
+	    throw std::ifstream::failure("EOF");
+	  } else {
+	    // background file reached its end, reset to the start
+	    std::cout << "Cycling back to the start of " << fileName << std::endl;
+	    adapter->close();
+	    adapter = HepMC3::deduce_reader(fileName);	    
+	  }
+	} catch (std::ifstream::failure& e) {
+	  continue; // just need to suppress the error
+        }
+      }
+
+      HepMC3::GenEvent inevt;
+      adapter->read_event(inevt);
+      
+      // Unit conversion
+      double timeHepmc = c_light * time;
+
+      std::vector<HepMC3::GenParticlePtr> particles;
+      std::vector<HepMC3::GenVertexPtr> vertices;
+
+      // Stores the vertices of the event inside a vertex container. These vertices are in increasing order so we can index them with [abs(vertex_id)-1]
+      for (auto& vertex : inevt.vertices()) {
+	HepMC3::FourVector position = vertex->position();
+	if (!squashTime) {
+	  position.set_t(position.t() + timeHepmc);
+	}
+	auto v1 = std::make_shared<HepMC3::GenVertex>(position);
+	vertices.push_back(v1);
+      }
+
+      // copies the particles and attaches them to their corresponding vertices
+      for (auto& particle : inevt.particles()) {
+	HepMC3::FourVector momentum = particle->momentum();
+	int status = particle->status();
+	int pid = particle->pid();
+	auto p1 = std::make_shared<HepMC3::GenParticle> (momentum, pid, status);
+	p1->set_generated_mass(particle->generated_mass());
+	particles.push_back(p1);
+	
+	// since the beam particles do not have a production vertex they cannot be attached to a production vertex
+	if (particle->production_vertex()->id() < 0) {
+	  int production_vertex = particle->production_vertex()->id();
+	  vertices[abs(production_vertex) - 1]->add_particle_out(p1);
+	  hepSlice->add_particle(p1);
+	}
+	
+	// Adds particles with an end vertex to their end vertices
+	if (particle->end_vertex()) {
+	  int end_vertex = particle->end_vertex()->id();
+	  vertices[abs(end_vertex) - 1]->add_particle_in(p1);
+	}
+      }
+
+      // Adds the vertices with the attached particles to the event
+      for (auto& vertex : vertices) {
+	hepSlice->add_vertex(vertex);
+      }
+    }
+
+    return;
+  }
+
+  // ---------------------------------------------------------------------------
+
+  void addWeightedEvents(std::string fileName, std::unique_ptr<HepMC3::GenEvent>& hepSlice, bool signal = false) {
+    std::vector<weightedEvent> events;
+    double avgRate;
+
+    std::tie(events, avgRate) = weightDict[fileName];
+
+    // How many events? Assume Poisson distribution
+    int nEvents;
+    std::exponential_distribution<> d( intWindow * avgRate );
+    while (true) {
+      nEvents = static_cast<int>(d(rng));
+      if (nEvents > events.size()) {
+	std::cout << "WARNING: Trying to place " << nEvents << " events from " << fileName
+		  << " but the file doesn't have enough. Rerolling, but this is not physical." << std::endl;
+	continue;
+      }
+      break;
+    }
+    if (verbose) std::cout << "Placing " << nEvents << " events from " << fileName << std::endl;
+
+    // // Get events
+    // std::vector<weightedEvent> toPlace = rng.choice(events, nEvents, false);
+
+    // // Place at random times
+    // std::vector<double> times;
+    // std::uniform_real_distribution<> uni(0, intWindow);
+    // if (!squashTime) {
+    //   times = rng.uniform(0, intWindow, nEvents);
+    // }
+
+    // for (Event& inevt : toPlace) {
+    //     double Time = 0;
+    //     if (!squash) {
+    //         Time = times.back();
+    //         times.pop_back();
+    //     }
+
+    //     std::vector<HepMC3::GenParticle> particles;
+    //     std::vector<HepMC3::GenVertex> vertices;
+
+    //     // Stores the vertices of the event inside a vertex container. These vertices are in increasing order so we can index them with [abs(vertex_id)-1]
+    //     for (auto& vertex : inevt.vertices) {
+    //         HepMC3::FourVector position = vertex->position();
+    //         if (!squash) {
+    //             // Unit conversion
+    //             double TimeHepmc = c_light * Time;
+    //             position.set_t(position.t() + TimeHepmc);
+    //         }
+    //         HepMC3::GenVertex v1(position);
+    //         vertices.push_back(v1);
+    //     }
+
+    //     // copies the particles and attaches them to their corresponding vertices
+    //     for (auto& particle : inevt.particles) {
+    //         HepMC3::FourVector momentum = particle->momentum();
+    //         int status = particle->status();
+    //         int pid = particle->pid();
+    //         HepMC3::GenParticle p1(momentum, pid, status);
+    //         p1.set_generated_mass(particle->generated_mass());
+    //         particles.push_back(p1);
+
+    //         // since the beam particles do not have a production vertex they cannot be attached to a production vertex
+    //         if (particle->production_vertex()->id() < 0) {
+    //             int production_vertex = particle->production_vertex()->id();
+    //             vertices[abs(production_vertex) - 1].add_particle_out(p1);
+    //             hepSlice.add_particle(p1);
+    //         }
+
+    //         // Adds particles with an end vertex to their end vertices
+    //         if (particle->end_vertex()) {
+    //             int end_vertex = particle->end_vertex()->id();
+    //             vertices[abs(end_vertex) - 1].add_particle_in(p1);
+    //         }
+    //     }
+
+    //     // Adds the vertices with the attached particles to the event
+    //     for (auto& vertex : vertices) {
+    //         hepSlice.add_vertex(vertex);
+    //     }
+    // }
+
+    return;
+}
+
+  // ---------------------------------------------------------------------------
+
+  std::vector<double> poissonTimes(double mu, double endTime) {
+    std::exponential_distribution<> exp(1.0 / mu);
+    
+    double t = 0;
+    std::vector<double> ret;
+    while (true) {
+      double delt = exp(rng);
+      t += delt;
+      if (t >= endTime) {
+	break;
+      }
+      ret.push_back(t);
+    }
+    return ret;
+}
+  // ---------------------------------------------------------------------------
 
   
 private:
-  std::default_random_engine rng;
+  std::mt19937 rng;
   string signalFile, bg1File, bg2File, bg3File;
   double signalFreq, bg1Freq, bg2Freq, bg3Freq;
   string outputFile;
@@ -385,16 +594,17 @@ private:
   typedef std::pair<HepMC3::GenEvent,double> weightedEvent;
   std::map<std::string, std::pair<std::vector<weightedEvent>,double>> weightDict;
 
+  const double c_light = 299.792458; // speed of light = 299.792458 mm/ns to get mm
+
 };
 
 // =============================================================
 int main(int argc, char* argv[]) {
-  cout << argc << "  " << argv[0] << endl;
 
   auto t0 = std::chrono::high_resolution_clock::now();
   // Create an instance of SignalBackgroundMerger
   SignalBackgroundMerger sbm (argc, argv);
-  // sbm.merge();
+  sbm.merge();
 
   std::cout << "\n==================================================================\n";
   std::cout << "Overall running time: " << std::round(std::chrono::duration<double, std::chrono::minutes::period>(std::chrono::high_resolution_clock::now() - t0).count()) << " min" << std::endl;
