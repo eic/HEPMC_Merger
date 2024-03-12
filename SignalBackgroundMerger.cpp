@@ -362,9 +362,9 @@ public:
       addFreqEvents(fileName.first, hepSlice);
     }
     
-    // for (const auto& fileName : weightDict) {
-    //   hepSlice = addWeightedEvents(fileName.first, hepSlice);
-    // }
+    for (const auto& fileName : weightDict) {
+      addWeightedEvents(fileName.first, hepSlice);
+    }
 
     return hepSlice;
   };
