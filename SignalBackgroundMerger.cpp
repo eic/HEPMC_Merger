@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cmath>
 #include <random>
+#include <tuple>
 #include <sys/resource.h>
 
 #include <HepMC3/ReaderFactory.h>
@@ -21,6 +22,12 @@
 #include "HepMC3/Print.h"
 
 #include "argparse/argparse.hpp"
+
+// DEBUG
+#include <TH1D.h>
+#include <TH1I.h>
+#include <TF1.h>
+#include <TFile.h>
 
 using std::cout;
 using std::cerr;
@@ -39,6 +46,19 @@ using std::string;
             --bg3File sr.hepmc
 **/    
 class SignalBackgroundMerger {
+
+private:
+  // more private data at the end; pulling these more complicated objects up for readability
+  std::map<std::string, std::pair< std::shared_ptr<HepMC3::Reader>,double> > sigDict;
+  std::map<std::string, std::pair< std::shared_ptr<HepMC3::Reader>,double> > freqDict;
+
+  // typedef std::pair<  > EventsAndWeights;
+  std::map<std::string,
+	   std::tuple<std::vector<HepMC3::GenEvent>,
+		      std::piecewise_constant_distribution<>,
+		      double>
+	   > weightDict;
+
 public:
 
   SignalBackgroundMerger(int argc, char* argv[]) {
@@ -60,6 +80,12 @@ public:
     makeDicts ( bg2File, bg2Freq );
     makeDicts ( bg3File, bg3Freq );
 
+    // DEBUG
+    f = new TFile("f.root","RECREATE");
+    p = new TH1I("p","poisson",20,-1,19);
+    e = new TH1I("e","exponential",20,-1,19);
+    // /DEBUG
+    
     auto t1 = std::chrono::high_resolution_clock::now();
     std::cout << "Initiation time: " << std::round(std::chrono::duration<double, std::chrono::seconds::period>(t1 - t0).count()) << " sec" << std::endl;
     std::cout << "\n==================================================================\n" << std::endl;
@@ -69,7 +95,7 @@ public:
   void merge(){
     auto t1 = std::chrono::high_resolution_clock::now();
 
-    // Open output file    
+    // Open output file
     std::shared_ptr<HepMC3::Writer> f;
     if (rootFormat)
       f = std::make_shared<HepMC3::WriterRootTree>(outputFileName);
@@ -124,25 +150,25 @@ public:
     args.add_argument("-sf", "--signalFreq")
       .default_value(0.0)
       .scan<'g', double>()
-      .help("Poisson-mu of the signal frequency in ns. Default is 0 to have exactly one signal event per slice. Set to the estimated DIS rate to randomize.");
+      .help("Signal frequency in kHz. Default is 0 to have exactly one signal event per slice. Set to the estimated DIS rate to randomize.");
     
     args.add_argument("-bg1", "--bg1File")
       .default_value(std::string("small_hgas_100GeV_HiAc_25mrad.Asciiv3.hepmc"))
       .help("Name of the first HEPMC file with background events");
     
     args.add_argument("-bf1", "--bg1Freq")
-      .default_value(31347.0)
+      .default_value(342.8)
       .scan<'g', double>()
-      .help("Poisson-mu of the first background frequency in ns. Default is the estimated hadron gas rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
+      .help("First background frequency in kHz. Default is the estimated hadron gas rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
     
     args.add_argument("-bg2", "--bg2File")
       .default_value(std::string("small_beam_gas_ep_10GeV_foam_emin10keV_vtx.hepmc"))
       .help("Name of the second HEPMC file with background events");
     
     args.add_argument("-bf2", "--bg2Freq")
-      .default_value(333.0)
+      .default_value(3177.25)
       .scan<'g', double>()
-      .help("Poisson-mu of the second background frequency in ns. Default is the estimated electron gas rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
+      .help("Second background frequency in kHz. Default is the estimated electron gas rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
     
     args.add_argument("-bg3", "--bg3File")
       .default_value(std::string("small_SR_single_2.5A_10GeV.hepmc"))
@@ -150,7 +176,7 @@ public:
     
     args.add_argument("-bf3", "--bg3Freq")
       .default_value(0.0)
-      .help("Poisson-mu of the third background frequency in ns. Default is 0 to use the weights in the corresponding input file. Set to a value >0 to specify a poisson mu instead.");
+      .help("Third background frequency in kHz. Default is 0 to use the weights in the corresponding input file. Set to a value >0 to specify a frequency instead.");
     
     args.add_argument("-o", "--outputFile")
       .default_value(std::string(""))
@@ -226,21 +252,21 @@ public:
     std::cout << "\nFor more information, run \n./signal_background_merger --help" << std::endl;
 
     std::cout << "Number of Slices:" << nSlices << endl;
-    std::string freqTerm = signalFreq > 0 ? std::to_string(signalFreq) + " ns" : "(one event per time slice)";
+    std::string freqTerm = signalFreq > 0 ? std::to_string(signalFreq) + " kHz" : "(one event per time slice)";
     std::cout << "Signal events file and frequency:\n";
     std::cout << "\t- " << signalFile << "\t" << freqTerm << "\n";
     
     std::cout << "\nBackground files and their respective frequencies:\n";
     if (!bg1File.empty()) {
-      freqTerm = bg1Freq > 0 ? std::to_string(bg1Freq) + " ns" : "(from weights)";
+      freqTerm = bg1Freq > 0 ? std::to_string(bg1Freq) + " kHz" : "(from weights)";
       std::cout << "\t- " << bg1File << "\t" << freqTerm << "\n";
     }
     if (!bg2File.empty()) {
-      freqTerm = bg2Freq > 0 ? std::to_string(bg2Freq) + " ns" : "(from weights)";
+      freqTerm = bg2Freq > 0 ? std::to_string(bg2Freq) + " kHz" : "(from weights)";
       std::cout << "\t- " << bg2File << "\t" << freqTerm << "\n";
     }
     if (!bg3File.empty()) {
-      freqTerm = bg3Freq > 0 ? std::to_string(bg3Freq) + " ns" : "(from weights)";
+      freqTerm = bg3Freq > 0 ? std::to_string(bg3Freq) + " kHz" : "(from weights)";
       std::cout << "\t- " << bg3File << "\t" << freqTerm << "\n";
     }	
   }
@@ -268,10 +294,7 @@ public:
     if (freq <= 0) {
       std::cout << "Reading in all events from " << fileName << std::endl;
       std::vector<HepMC3::GenEvent> events;
-
-      std::vector<weightedEvent> weightedEvents;
-	// HepMC3::GenEvent event;
-
+      std::vector<double> weights;
 
       while(!adapter->failed()) {
 	HepMC3::GenEvent evt(HepMC3::Units::GEV,HepMC3::Units::MM);
@@ -280,27 +303,34 @@ public:
 	// HepMC3::Print::content(evt);
 
 	// remove events with 0 weight - note that this does change avgRate = <weight> (by a little)
-	if (evt.weight() > 0){
-	  weightedEvents.push_back({evt,evt.weight()});
+	if (double w=evt.weight() > 0){
+	  events.push_back(evt);
+	  weights.push_back(evt.weight());
 	}
       }
       adapter->close();
       
       double avgRate = 0.0;
-      for ( auto w : weightedEvents ){ avgRate += w.second;}
-      avgRate /= weightedEvents.size();
+      for ( auto w : weights ){ avgRate += w;}
+      avgRate /= weights.size();
       avgRate *= 1e-9; // convert to 1/ns == GHz
       std::cout << "Average rate is " << avgRate << " GHz" << std::endl;
-      for ( auto w : weightedEvents ) {
-	w.second /= avgRate;
-      }
 
-      // Optional to sort, may speed up random drawing
-      std::sort(weightedEvents.begin(), weightedEvents.end(), [](auto &left, auto &right) {
-	  return left.second < right.second;
-	});
+      std::vector<int> indices (weights.size());
+      std::iota (std::begin(indices), std::end(indices), 0); // [ 0 , ... , N ] <- draw randomly from this
       
-      weightDict[fileName] = {weightedEvents, avgRate};
+      // Replacing python's compact toPlace = self.rng.choice( a=events, size=nEvents, p=probs, replace=False )
+      // is tricky. Possibly more elegant or faster versions exist,
+      // https://stackoverflow.com/questions/42926209/equivalent-function-to-numpy-random-choice-in-c
+      // we'll do it rather bluntly, since the need for this code should go away soon with new SR infrastructure
+      // https://stackoverflow.com/questions/1761626/weighted-random-numbers
+      // Normalizing is not necessary for this method 
+      // for ( auto& w : weights ) {
+      // 	w /= avgRate;
+      // }
+      std::piecewise_constant_distribution<> weightedDist(std::begin(indices),std::end(indices),
+							  std::begin(weights));
+      weightDict[fileName] = { std::make_tuple(events, weightedDist, avgRate) };
 
       return;
     }
@@ -398,6 +428,14 @@ public:
     }
     
     if ( verbose) std::cout << "Placing " << slice.size() << " events from " << fileName << std::endl;
+    // DEBUG
+    e->Fill(slice.size());
+    std::poisson_distribution<> d( freq*1e-6 * intWindow );
+    auto np = d(rng);
+    p->Fill(np);
+    // /DEBUG
+    
+    
     if (slice.empty()) return;
     
     // Insert events at all specified locations
@@ -410,8 +448,16 @@ public:
 	  } else {
 	    // background file reached its end, reset to the start
 	    std::cout << "Cycling back to the start of " << fileName << std::endl;
-	    adapter->close();
-	    adapter = HepMC3::deduce_reader(fileName);	    
+	    // cout << adapter << endl;
+	    // cout << adapter->failed() << endl;
+	    // adapter->close();
+	    // adapter = HepMC3::deduce_reader(fileName);
+	    // cout << adapter << endl;
+	    // cout << adapter->failed() << endl;
+	    // HepMC3::GenEvent inevt;
+	    // adapter->read_event(inevt);
+	    // HepMC3::Print::listing(inevt);
+	    // throw();
 	  }
 	} catch (std::ifstream::failure& e) {
 	  continue; // just need to suppress the error
@@ -472,28 +518,34 @@ public:
   // ---------------------------------------------------------------------------
 
   void addWeightedEvents(std::string fileName, std::unique_ptr<HepMC3::GenEvent>& hepSlice, bool signal = false) {
-    std::vector<weightedEvent> events;
-    double avgRate;
-
-    std::tie(events, avgRate) = weightDict[fileName];
+    auto& [events, weightedDist, avgRate ] = weightDict[fileName];
 
     // How many events? Assume Poisson distribution
     int nEvents;
-    std::exponential_distribution<> d( intWindow * avgRate );
+    std::poisson_distribution<> d( intWindow * avgRate );
+
+    // Small SR files may not have enough photons (example or test files). Could use them all or reroll
+    // Choosing the latter, neither is physical
     while (true) {
-      nEvents = static_cast<int>(d(rng));
+      nEvents = d(rng);
       if (nEvents > events.size()) {
 	std::cout << "WARNING: Trying to place " << nEvents << " events from " << fileName
-		  << " but the file doesn't have enough. Rerolling, but this is not physical." << std::endl;
+       		  << " but the file doesn't have enough. Rerolling, but this is not physical." << std::endl;
 	continue;
       }
       break;
     }
+
     if (verbose) std::cout << "Placing " << nEvents << " events from " << fileName << std::endl;
 
-    // // Get events
-    // std::vector<weightedEvent> toPlace = rng.choice(events, nEvents, false);
-
+    // Get randomized event indices
+    // Note: Could change to drawing without replacing ( if ( not in toPLace) ...) , not worth the effort
+    std::vector<HepMC3::GenEvent> toPlace(nEvents);
+    for ( auto& e : toPlace ){
+      auto i = static_cast<int> (weightedDist(rng));
+      e = events.at(i);
+    }
+    
     // // Place at random times
     // std::vector<double> times;
     // std::uniform_real_distribution<> uni(0, intWindow);
@@ -501,12 +553,14 @@ public:
     //   times = rng.uniform(0, intWindow, nEvents);
     // }
 
+    // slice = poissonTimes(freq, intWindow);
     // for (Event& inevt : toPlace) {
     //     double Time = 0;
     //     if (!squash) {
     //         Time = times.back();
     //         times.pop_back();
     //     }
+    // }
 
     //     std::vector<HepMC3::GenParticle> particles;
     //     std::vector<HepMC3::GenVertex> vertices;
@@ -558,12 +612,13 @@ public:
   // ---------------------------------------------------------------------------
 
   std::vector<double> poissonTimes(double mu, double endTime) {
-    std::exponential_distribution<> exp(1.0 / mu);
+    std::exponential_distribution<> exp(mu);
     
     double t = 0;
     std::vector<double> ret;
     while (true) {
-      double delt = exp(rng);
+      double delt = exp(rng)*1e6;
+      // cout << delt <<endl;
       t += delt;
       if (t >= endTime) {
 	break;
@@ -575,7 +630,7 @@ public:
   // ---------------------------------------------------------------------------
 
   
-private:
+  // private:
   std::mt19937 rng;
   string signalFile, bg1File, bg2File, bg3File;
   double signalFreq, bg1Freq, bg2Freq, bg3Freq;
@@ -588,14 +643,15 @@ private:
   int rngSeed;  // should be unsigned, but argparse cannot read that
   bool verbose;
   
-  std::map<std::string, std::pair< std::shared_ptr<HepMC3::Reader>,double> > sigDict;
-  std::map<std::string, std::pair< std::shared_ptr<HepMC3::Reader>,double> > freqDict;
-
-  typedef std::pair<HepMC3::GenEvent,double> weightedEvent;
-  std::map<std::string, std::pair<std::vector<weightedEvent>,double>> weightDict;
-
   const double c_light = 299.792458; // speed of light = 299.792458 mm/ns to get mm
 
+  // DEBUG
+  
+  TFile *f;
+  TH1I* p;
+  TH1I* e;
+
+  
 };
 
 // =============================================================
@@ -604,7 +660,29 @@ int main(int argc, char* argv[]) {
   auto t0 = std::chrono::high_resolution_clock::now();
   // Create an instance of SignalBackgroundMerger
   SignalBackgroundMerger sbm (argc, argv);
+
+  // // DEBUG
+  // auto f = new TFile("f.root","RECREATE");
+  // auto p = new TH1I("p","poisson",100,-1,99);
+  // auto e = new TH1I("e","exponential",100,-1,99);
+  // int N = 100000;
+  // float rate = 20;
+  // float length = 2;
+  // std::poisson_distribution<> d( rate * length );
+  
+  // for (int i=0; i< N; ++i){
+  //   auto np = d(sbm.rng);
+  //   p->Fill(np);
+  //   auto pTimes = sbm.poissonTimes(rate, length);
+  //   auto ne = pTimes.size();
+  //   e->Fill(ne);
+  //   // cout << np << "  " << ne << endl;
+  // }
+
   sbm.merge();
+  sbm.p->Write();
+  sbm.e->Write();  
+  sbm.f->Close();
 
   std::cout << "\n==================================================================\n";
   std::cout << "Overall running time: " << std::round(std::chrono::duration<double, std::chrono::minutes::period>(std::chrono::high_resolution_clock::now() - t0).count()) << " min" << std::endl;
