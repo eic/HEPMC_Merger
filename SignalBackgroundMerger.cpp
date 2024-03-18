@@ -49,8 +49,13 @@ class SignalBackgroundMerger {
 
 private:
   // more private data at the end; pulling these more complicated objects up for readability
-  std::map<std::string, std::pair< std::shared_ptr<HepMC3::Reader>,double> > sigDict;
-  std::map<std::string, std::pair< std::shared_ptr<HepMC3::Reader>,double> > freqDict;
+  
+  // std::map<std::string, std::pair< std::shared_ptr<HepMC3::Reader>,double> > sigDict;
+  // std::map<std::string, std::pair< std::shared_ptr<HepMC3::Reader>,double> > freqDict;
+  std::shared_ptr<HepMC3::Reader> sigAdapter;
+  double sigFreq;
+  std::map<std::string, std::shared_ptr<HepMC3::Reader>> freqAdapters;
+  std::map<std::string, double> freqs;
 
   // typedef std::pair<  > EventsAndWeights;
   std::map<std::string,
@@ -75,10 +80,10 @@ public:
     }
     cout << "Writing to " << outputFileName << endl;
 
-    makeDicts ( signalFile, signalFreq, true );
-    makeDicts ( bg1File, bg1Freq );
-    makeDicts ( bg2File, bg2Freq );
-    makeDicts ( bg3File, bg3Freq );
+    PrepData ( signalFile, signalFreq, true );
+    PrepData ( bg1File, bg1Freq );
+    PrepData ( bg2File, bg2Freq );
+    PrepData ( bg3File, bg3Freq );
 
     // DEBUG
     f = new TFile("f.root","RECREATE");
@@ -123,12 +128,9 @@ public:
     std::cout << " -- " << std::round(std::chrono::duration<double>(t2 - t1).count() / i) << " sec / slice" << std::endl;
 
     // clean up, close all files
-    auto it = sigDict.find(signalFile);
-    if (it != sigDict.end()) {
-      it->second.first->close();
-    }
-    for (auto& it : freqDict) {
-      it.second.first->close();
+    sigAdapter->close();
+    for (auto& it : freqAdapters) {
+      it.second->close();
     }
     f->close();
 	
@@ -272,9 +274,10 @@ public:
   }
   
   // ---------------------------------------------------------------------------  
-  void makeDicts(const std::string& fileName, double freq, bool signal=false) {
+  void PrepData(const std::string& fileName, double freq, bool signal=false) {
     if (fileName.empty()) return;
-    
+
+    cout << "Prepping " << fileName << endl;
     std::shared_ptr<HepMC3::Reader> adapter;
     try {
       adapter = HepMC3::deduce_reader(fileName);
@@ -287,10 +290,12 @@ public:
     }
     
     if (signal) {
-      sigDict[fileName] = {adapter, freq};
+      sigAdapter = adapter;
+      sigFreq = freq;
       return;
     }
-    
+
+    // Now catch the weighted case
     if (freq <= 0) {
       std::cout << "Reading in all events from " << fileName << std::endl;
       std::vector<HepMC3::GenEvent> events;
@@ -335,8 +340,9 @@ public:
       return;
     }
 
-    // Not signal and not weighted --> update freqDict
-    freqDict[fileName] = {adapter, freq};
+    // Not signal and not weighted --> prepare frequency backgrounds
+    freqAdapters[fileName] = adapter;
+    freqs[fileName] = freq;
   }
 
 
@@ -386,10 +392,11 @@ public:
   std::unique_ptr<HepMC3::GenEvent> mergeSlice(int i) {
     auto hepSlice = std::make_unique<HepMC3::GenEvent>(HepMC3::Units::GEV, HepMC3::Units::MM);
     
-    addFreqEvents(signalFile, hepSlice, true);
+    addFreqEvents(signalFile, sigAdapter, sigFreq, hepSlice, true);
     
-    for (const auto& fileName : freqDict) {
-      addFreqEvents(fileName.first, hepSlice);
+    for (const auto& freqBgs : freqAdapters) {
+      auto fileName=freqBgs.first;
+      addFreqEvents(fileName, freqAdapters[fileName], freqs[fileName], hepSlice);
     }
     
     for (const auto& fileName : weightDict) {
@@ -401,16 +408,9 @@ public:
 
   // ---------------------------------------------------------------------------
 
-  void addFreqEvents(std::string fileName, std::unique_ptr<HepMC3::GenEvent>& hepSlice, bool signal = false) {
-    double freq;
-    std::shared_ptr<HepMC3::Reader> adapter;
-    
-    if (signal) {
-      std::tie(adapter, freq) = sigDict[fileName];
-    } else {
-      std::tie(adapter, freq) = freqDict[fileName];
-    }
-    
+  void addFreqEvents(std::string fileName, std::shared_ptr<HepMC3::Reader>& adapter, const double freq,
+		     std::unique_ptr<HepMC3::GenEvent>& hepSlice, bool signal = false) {
+
     // First, create a timeline
     // Signals can be different
     std::vector<double> slice;
@@ -437,7 +437,7 @@ public:
     
     
     if (slice.empty()) return;
-    
+
     // Insert events at all specified locations
     for (double time : slice) {
       if(adapter->failed()) {
@@ -450,8 +450,8 @@ public:
 	    std::cout << "Cycling back to the start of " << fileName << std::endl;
 	    // cout << adapter << endl;
 	    // cout << adapter->failed() << endl;
-	    // adapter->close();
-	    // adapter = HepMC3::deduce_reader(fileName);
+	    adapter->close();
+	    adapter = HepMC3::deduce_reader(fileName);
 	    // cout << adapter << endl;
 	    // cout << adapter->failed() << endl;
 	    // HepMC3::GenEvent inevt;
