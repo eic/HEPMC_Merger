@@ -67,5 +67,8 @@ cmake-build-*/
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio and WebStorm
 .idea/
 
+#Visual Studio
+.vscode
+
 # ignore doxygen
 doxygen
