@@ -85,11 +85,11 @@ public:
     PrepData ( bg2File, bg2Freq );
     PrepData ( bg3File, bg3Freq );
 
-    // DEBUG
-    f = new TFile("f.root","RECREATE");
-    p = new TH1I("p","poisson",20,-1,19);
-    e = new TH1I("e","exponential",20,-1,19);
-    // /DEBUG
+    // // DEBUG
+    // f = new TFile("f.root","RECREATE");
+    // p = new TH1I("p","poisson",20,-1,19);
+    // e = new TH1I("e","exponential",20,-1,19);
+    // // /DEBUG
     
     auto t1 = std::chrono::high_resolution_clock::now();
     std::cout << "Initiation time: " << std::round(std::chrono::duration<double, std::chrono::seconds::period>(t1 - t0).count()) << " sec" << std::endl;
@@ -428,12 +428,13 @@ public:
     }
     
     if ( verbose) std::cout << "Placing " << timeline.size() << " events from " << fileName << std::endl;
-    // DEBUG
-    e->Fill(timeline.size());
-    std::poisson_distribution<> d( freq*1e-6 * intWindow );
-    auto np = d(rng);
-    p->Fill(np);
-    // /DEBUG
+
+    // // DEBUG
+    // e->Fill(timeline.size());
+    // std::poisson_distribution<> d( freq*1e-6 * intWindow );
+    // auto np = d(rng);
+    // p->Fill(np);
+    // // /DEBUG
     
     
     if (timeline.empty()) return;
@@ -506,59 +507,6 @@ public:
 	insertHepmcEvent( e, hepSlice, time);
       }
     }
-
-    // auto slice = poissonTimes(freq, intWindow);
-    // for (Event& inevt : toPlace) {
-    //     double Time = 0;
-    //     if (!squash) {
-    //         Time = times.back();
-    //         times.pop_back();
-    //     }
-    // }
-
-    //     std::vector<HepMC3::GenParticle> particles;
-    //     std::vector<HepMC3::GenVertex> vertices;
-
-    //     // Stores the vertices of the event inside a vertex container. These vertices are in increasing order so we can index them with [abs(vertex_id)-1]
-    //     for (auto& vertex : inevt.vertices) {
-    //         HepMC3::FourVector position = vertex->position();
-    //         if (!squash) {
-    //             // Unit conversion
-    //             double TimeHepmc = c_light * Time;
-    //             position.set_t(position.t() + TimeHepmc);
-    //         }
-    //         HepMC3::GenVertex v1(position);
-    //         vertices.push_back(v1);
-    //     }
-
-    //     // copies the particles and attaches them to their corresponding vertices
-    //     for (auto& particle : inevt.particles) {
-    //         HepMC3::FourVector momentum = particle->momentum();
-    //         int status = particle->status();
-    //         int pid = particle->pid();
-    //         HepMC3::GenParticle p1(momentum, pid, status);
-    //         p1.set_generated_mass(particle->generated_mass());
-    //         particles.push_back(p1);
-
-    //         // since the beam particles do not have a production vertex they cannot be attached to a production vertex
-    //         if (particle->production_vertex()->id() < 0) {
-    //             int production_vertex = particle->production_vertex()->id();
-    //             vertices[abs(production_vertex) - 1].add_particle_out(p1);
-    //             hepSlice.add_particle(p1);
-    //         }
-
-    //         // Adds particles with an end vertex to their end vertices
-    //         if (particle->end_vertex()) {
-    //             int end_vertex = particle->end_vertex()->id();
-    //             vertices[abs(end_vertex) - 1].add_particle_in(p1);
-    //         }
-    //     }
-
-    //     // Adds the vertices with the attached particles to the event
-    //     for (auto& vertex : vertices) {
-    //         hepSlice.add_vertex(vertex);
-    //     }
-    // }
 
     return;
 }
@@ -646,11 +594,10 @@ public:
   
   const double c_light = 299.792458; // speed of light = 299.792458 mm/ns to get mm
 
-  // DEBUG
-  
-  TFile *f;
-  TH1I* p;
-  TH1I* e;
+  // // DEBUG  
+  // TFile *f;
+  // TH1I* p;
+  // TH1I* e;
 
   
 };
@@ -661,6 +608,9 @@ int main(int argc, char* argv[]) {
   auto t0 = std::chrono::high_resolution_clock::now();
   // Create an instance of SignalBackgroundMerger
   SignalBackgroundMerger sbm (argc, argv);
+
+
+  sbm.merge();
 
   // // DEBUG
   // auto f = new TFile("f.root","RECREATE");
@@ -679,11 +629,9 @@ int main(int argc, char* argv[]) {
   //   e->Fill(ne);
   //   // cout << np << "  " << ne << endl;
   // }
-
-  sbm.merge();
-  sbm.p->Write();
-  sbm.e->Write();  
-  sbm.f->Close();
+  // sbm.p->Write();
+  // sbm.e->Write();  
+  // sbm.f->Close();
 
   std::cout << "\n==================================================================\n";
   std::cout << "Overall running time: " << std::round(std::chrono::duration<double, std::chrono::minutes::period>(std::chrono::high_resolution_clock::now() - t0).count()) << " min" << std::endl;
