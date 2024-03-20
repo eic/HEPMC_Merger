@@ -413,7 +413,7 @@ public:
 
     // First, create a timeline
     // Signals can be different
-    std::vector<double> slice;
+    std::vector<double> timeline;
     std::uniform_real_distribution<> uni(0, intWindow);
     if (freq == 0) {
       if (!signal) {
@@ -421,25 +421,25 @@ public:
 	exit(1);
       }
       // exactly one signal event, at an arbitrary point
-      slice.push_back(uni(rng));
+      timeline.push_back(uni(rng));
     } else {
       // Generate poisson-distributed times to place events
-      slice = poissonTimes(freq, intWindow);
+      timeline = poissonTimes(freq, intWindow);
     }
     
-    if ( verbose) std::cout << "Placing " << slice.size() << " events from " << fileName << std::endl;
+    if ( verbose) std::cout << "Placing " << timeline.size() << " events from " << fileName << std::endl;
     // DEBUG
-    e->Fill(slice.size());
+    e->Fill(timeline.size());
     std::poisson_distribution<> d( freq*1e-6 * intWindow );
     auto np = d(rng);
     p->Fill(np);
     // /DEBUG
     
     
-    if (slice.empty()) return;
+    if (timeline.empty()) return;
 
     // Insert events at all specified locations
-    for (double time : slice) {
+    for (double time : timeline) {
       if(adapter->failed()) {
 	try{
 	  if (signal) {
@@ -448,16 +448,8 @@ public:
 	  } else {
 	    // background file reached its end, reset to the start
 	    std::cout << "Cycling back to the start of " << fileName << std::endl;
-	    // cout << adapter << endl;
-	    // cout << adapter->failed() << endl;
 	    adapter->close();
 	    adapter = HepMC3::deduce_reader(fileName);
-	    // cout << adapter << endl;
-	    // cout << adapter->failed() << endl;
-	    // HepMC3::GenEvent inevt;
-	    // adapter->read_event(inevt);
-	    // HepMC3::Print::listing(inevt);
-	    // throw();
 	  }
 	} catch (std::ifstream::failure& e) {
 	  continue; // just need to suppress the error
@@ -466,52 +458,11 @@ public:
 
       HepMC3::GenEvent inevt;
       adapter->read_event(inevt);
+
+      if (squashTime) time = 0;
+      insertHepmcEvent( inevt, hepSlice, time);
       
-      // Unit conversion
-      double timeHepmc = c_light * time;
-
-      std::vector<HepMC3::GenParticlePtr> particles;
-      std::vector<HepMC3::GenVertexPtr> vertices;
-
-      // Stores the vertices of the event inside a vertex container. These vertices are in increasing order so we can index them with [abs(vertex_id)-1]
-      for (auto& vertex : inevt.vertices()) {
-	HepMC3::FourVector position = vertex->position();
-	if (!squashTime) {
-	  position.set_t(position.t() + timeHepmc);
-	}
-	auto v1 = std::make_shared<HepMC3::GenVertex>(position);
-	vertices.push_back(v1);
-      }
-
-      // copies the particles and attaches them to their corresponding vertices
-      for (auto& particle : inevt.particles()) {
-	HepMC3::FourVector momentum = particle->momentum();
-	int status = particle->status();
-	int pid = particle->pid();
-	auto p1 = std::make_shared<HepMC3::GenParticle> (momentum, pid, status);
-	p1->set_generated_mass(particle->generated_mass());
-	particles.push_back(p1);
-	
-	// since the beam particles do not have a production vertex they cannot be attached to a production vertex
-	if (particle->production_vertex()->id() < 0) {
-	  int production_vertex = particle->production_vertex()->id();
-	  vertices[abs(production_vertex) - 1]->add_particle_out(p1);
-	  hepSlice->add_particle(p1);
-	}
-	
-	// Adds particles with an end vertex to their end vertices
-	if (particle->end_vertex()) {
-	  int end_vertex = particle->end_vertex()->id();
-	  vertices[abs(end_vertex) - 1]->add_particle_in(p1);
-	}
-      }
-
-      // Adds the vertices with the attached particles to the event
-      for (auto& vertex : vertices) {
-	hepSlice->add_vertex(vertex);
-      }
     }
-
     return;
   }
 
@@ -546,14 +497,17 @@ public:
       e = events.at(i);
     }
     
-    // // Place at random times
-    // std::vector<double> times;
-    // std::uniform_real_distribution<> uni(0, intWindow);
-    // if (!squashTime) {
-    //   times = rng.uniform(0, intWindow, nEvents);
-    // }
+    // Place at random times
+    std::vector<double> timeline;
+    std::uniform_real_distribution<> uni(0, intWindow);
+    if (!squashTime) {
+      for ( auto& e : toPlace ){
+	double time = squashTime ? 0 : uni(rng);
+	insertHepmcEvent( e, hepSlice, time);
+      }
+    }
 
-    // slice = poissonTimes(freq, intWindow);
+    // auto slice = poissonTimes(freq, intWindow);
     // for (Event& inevt : toPlace) {
     //     double Time = 0;
     //     if (!squash) {
@@ -608,6 +562,53 @@ public:
 
     return;
 }
+
+  // ---------------------------------------------------------------------------
+  void insertHepmcEvent( const HepMC3::GenEvent& inevt,
+			 std::unique_ptr<HepMC3::GenEvent>& hepSlice, double time=0) {
+    // Unit conversion
+    double timeHepmc = c_light * time;
+    
+    std::vector<HepMC3::GenParticlePtr> particles;
+    std::vector<HepMC3::GenVertexPtr> vertices;
+
+    // Stores the vertices of the event inside a vertex container. These vertices are in increasing order
+    // so we can index them with [abs(vertex_id)-1]
+    for (auto& vertex : inevt.vertices()) {
+      HepMC3::FourVector position = vertex->position();
+      position.set_t(position.t() + timeHepmc);
+      auto v1 = std::make_shared<HepMC3::GenVertex>(position);
+      vertices.push_back(v1);
+    }
+      
+    // copies the particles and attaches them to their corresponding vertices
+    for (auto& particle : inevt.particles()) {
+      HepMC3::FourVector momentum = particle->momentum();
+      int status = particle->status();
+      int pid = particle->pid();
+      auto p1 = std::make_shared<HepMC3::GenParticle> (momentum, pid, status);
+      p1->set_generated_mass(particle->generated_mass());
+      particles.push_back(p1);
+      // since the beam particles do not have a production vertex they cannot be attached to a production vertex
+      if (particle->production_vertex()->id() < 0) {
+	int production_vertex = particle->production_vertex()->id();
+	vertices[abs(production_vertex) - 1]->add_particle_out(p1);
+	hepSlice->add_particle(p1);
+      }
+	
+      // Adds particles with an end vertex to their end vertices
+      if (particle->end_vertex()) {
+	int end_vertex = particle->end_vertex()->id();
+	vertices.at(abs(end_vertex) - 1)->add_particle_in(p1);	
+      }
+    }
+
+    // Adds the vertices with the attached particles to the event
+    for (auto& vertex : vertices) {
+      hepSlice->add_vertex(vertex);
+    }
+    
+  }
 
   // ---------------------------------------------------------------------------
 
