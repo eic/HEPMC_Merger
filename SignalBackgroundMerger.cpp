@@ -178,6 +178,7 @@ public:
     
     args.add_argument("-bf3", "--bg3Freq")
       .default_value(0.0)
+      .scan<'g', double>()
       .help("Third background frequency in kHz. Default is 0 to use the weights in the corresponding input file. Set to a value >0 to specify a frequency instead.");
     
     args.add_argument("-o", "--outputFile")
@@ -191,6 +192,7 @@ public:
 	
     args.add_argument("-w", "--intWindow")
       .default_value(2000.0)
+      .scan<'g', double>()
       .help("Length of the integration window in nanoseconds. Default is 2000.");
     
     args.add_argument("-N", "--nSlices")
@@ -414,7 +416,7 @@ public:
     // First, create a timeline
     // Signals can be different
     std::vector<double> timeline;
-    std::uniform_real_distribution<> uni(0, intWindow);
+    std::uniform_real_distribution<> uni(0.0, intWindow);
     if (freq == 0) {
       if (!signal) {
 	std::cerr << "frequency can't be 0 for background files" << std::endl;
@@ -500,7 +502,7 @@ public:
     
     // Place at random times
     std::vector<double> timeline;
-    std::uniform_real_distribution<> uni(0, intWindow);
+    std::uniform_real_distribution<double> uni(0.0, intWindow);
     if (!squashTime) {
       for ( auto& e : toPlace ){
 	double time = squashTime ? 0 : uni(rng);
