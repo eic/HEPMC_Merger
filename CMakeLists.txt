@@ -40,6 +40,8 @@ target_link_libraries(SignalBackgroundMerger ROOT::Tree ROOT::RIO ROOT::Core ROO
 target_include_directories(SignalBackgroundMerger
   PRIVATE
   ${HEPMC3_INCLUDE_DIR}
+  include/HEPMC_Merger
+  include/argparse
 )
 
   
