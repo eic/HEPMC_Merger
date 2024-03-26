@@ -28,13 +28,13 @@ message ( "-- HepMC3 library found at ${HEPMC3_LIB}" )
 find_package(ROOT 6.20 CONFIG REQUIRED)
 
 #----------------------------------------------------------------------------
-set(sources ${PROJECT_SOURCE_DIR}/SignalBackgroundMerger.cpp )
+file(GLOB sources "${PROJECT_SOURCE_DIR}/src/*.cpp")
 # file( headers )
 
 #----------------------------------------------------------------------------
 # Add the executable, and link it to external libraries
 #
-add_executable(SignalBackgroundMerger ${sources})
+add_executable(SignalBackgroundMerger SignalBackgroundMerger.cpp ${sources})
 target_compile_features(SignalBackgroundMerger PUBLIC cxx_std_17)
 target_link_libraries(SignalBackgroundMerger ROOT::Tree ROOT::RIO ROOT::Core ROOT::Hist HepMC3::HepMC3 HepMC3::rootIO )
 target_include_directories(SignalBackgroundMerger
