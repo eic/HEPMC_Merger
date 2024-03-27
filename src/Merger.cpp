@@ -118,15 +118,15 @@ void Merger::printBanner(int nSlices){
     std::cout << "\nFor more information, run \n./signal_background_merger --help" << std::endl;
 
     std::cout << "Number of Slices:" << nSlices << std::endl;
-    std::string freqTerm = sources[0].getFreq() > 0 ? std::to_string(sources[0].getFreq()) + " kHz" : "(one event per time slice)";
+    std::string freqTerm = sources[0].getFreq() > 0 ? std::to_string(sources[0].getFreq()) + " GHz" : "(one event per time slice)";
     std::cout << "Signal events file and frequency:\n";
     std::cout << "\t- " << sources[0].getFileName() << "\t" << freqTerm << "\n";
 
     std::cout << "\nBackground files and their respective frequencies:\n";
     for(auto it = sources.begin() + 1; it != sources.end(); ++it) {
         auto& source = *it;
-        freqTerm = source.getFreq() > 0 ? std::to_string(source.getFreq()) + " kHz" : "(one event per time slice)";
-        std::cout << "\t- " << source.getFileName() << "\t" << freqTerm << " kHz" << "\n";
+        freqTerm = source.getFreq() > 0 ? std::to_string(source.getFreq()) + " GHz" : "(one event per time slice)";
+        std::cout << "\t- " << source.getFileName() << "\t" << freqTerm << "\n";
     }
 }
 

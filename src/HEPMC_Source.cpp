@@ -24,6 +24,8 @@ HEPMC_Source::HEPMC_Source(std::string fileName, double freq, int sourceNo): m_f
         SetupWeights();
     } else {
         isWeighted = false;
+        // Convert from kHz to GHz
+        m_freq *= 1e-6;
     }        
 
 }
@@ -54,7 +56,7 @@ void HEPMC_Source::SetupWeights() {
 // ---------------------------------------------------------------------------
 // Generate a timeline of event times
 // ---------------------------------------------------------------------------
-std::vector<double> HEPMC_Source::GenerateSampleTimes(double intWindow, double bunchSpacing, std::mt19937 rng) {
+std::vector<double> HEPMC_Source::GenerateSampleTimes(double intWindow, double bunchSpacing, std::mt19937& rng) {
     
     int nEvents = 0;
     if (m_freq == 0){
@@ -91,14 +93,13 @@ std::vector<double> HEPMC_Source::GenerateSampleTimes(double intWindow, double b
 // ---------------------------------------------------------------------------
 // Get the next event
 // ---------------------------------------------------------------------------
-HepMC3::GenEvent HEPMC_Source::getNextEvent(std::mt19937 rng) {
+HepMC3::GenEvent HEPMC_Source::getNextEvent(std::mt19937& rng) {
     HepMC3::GenEvent evt(HepMC3::Units::GEV,HepMC3::Units::MM);
     if(isWeighted) {
         evt = eventList[weightedDist(rng)];
     } else {
         while (!adapter->failed()) {
             adapter->read_event(evt);
-            if (evt.weight() <= 0) continue;
             break;
         }
         if (adapter->failed()) {
