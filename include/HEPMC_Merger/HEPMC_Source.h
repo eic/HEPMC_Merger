@@ -28,7 +28,7 @@ public:
 private:
     std::shared_ptr<HepMC3::Reader> adapter;
 
-    const std::string& m_fileName;
+    std::string m_fileName;
     double m_freq; // frequency of the source kHz
     int    m_sourceNo; // source reference number
 
