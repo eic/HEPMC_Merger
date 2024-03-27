@@ -7,6 +7,9 @@
 #include "HEPMC_Source.h"
 #include <HepMC3/WriterAscii.h>
 #include <HepMC3/WriterRootTree.h>
+#include <HepMC3/GenRunInfo.h>
+#include <HepMC3/GenParticle.h>
+#include <HepMC3/GenVertex.h>
 
 // =============================================================
 /**

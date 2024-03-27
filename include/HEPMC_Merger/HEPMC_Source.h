@@ -4,7 +4,9 @@
 #include <vector>
 #include <random>
 #include <memory>
-#include <HepMC3/ReaderFactory.h>
+#include <HepMC3/Reader.h>
+#include <HepMC3/Units.h>
+#include <HepMC3/GenEvent.h>
 
 class HEPMC_Source {
 

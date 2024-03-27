@@ -6,45 +6,39 @@ if(${CMAKE_VERSION} VERSION_LESS 3.12)
 endif()
 project(SignalBackgroundMerger VERSION 1.0)
 
-
-## This enables us to use CMAKE_INSTALL_FULL_DATADIR in the code
-## (should resolve to ${CMAKE_INSTALL_PREFIX}/share)
-include(GNUInstallDirs)
-add_definitions(-DCMAKE_INSTALL_FULL_DATADIR="${CMAKE_INSTALL_FULL_DATADIR}")
-## Also hand over the source directory for people who don't do make install
-add_definitions(-DCMAKE_PROJECT_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
-
 #----------------------------------------------------------------------------
 # Find HepMC3
 message ( "---- You can specify a HepMC3 installation using \"-DHepMC3=[path/to/lib]\" " )
 # message ( "---- HepMC3=" ${HepMC3} )
-find_package(HepMC3 3.2.6 REQUIRED HINTS ${HepMC3} ${HepMC3_DIR} )
+find_package(HepMC3 REQUIRED)
 message ( "-- HepMC3 library found at ${HEPMC3_LIB}" )
-# message ( "-- HepMC3 headers found in ${HEPMC3_INCLUDE_DIR}" )
+message ( "-- HepMC3 headers found in ${HEPMC3_INCLUDE_DIR}" )
 
 
 #----------------------------------------------------------------------------
 # Find root, for hepmc.root format
-find_package(ROOT 6.20 CONFIG REQUIRED)
+#find_package(ROOT 6.20 CONFIG REQUIRED)
 
 #----------------------------------------------------------------------------
 file(GLOB sources "${PROJECT_SOURCE_DIR}/src/*.cpp")
 # file( headers )
 
+add_library(deduce_reader_wrapper SHARED include/deduce_reader_wrapper/deduce_reader_wrapper.cpp)
+#target_link_libraries(deduce_reader_wrapper ${HEPMC3_LIB})
+
 #----------------------------------------------------------------------------
 # Add the executable, and link it to external libraries
 #
-add_executable(SignalBackgroundMerger SignalBackgroundMerger.cpp ${sources})
+add_executable(SignalBackgroundMerger ${sources} SignalBackgroundMerger.cpp )
 target_compile_features(SignalBackgroundMerger PUBLIC cxx_std_17)
-target_link_libraries(SignalBackgroundMerger ROOT::Tree ROOT::RIO ROOT::Core ROOT::Hist HepMC3::HepMC3 HepMC3::rootIO )
+target_link_libraries(SignalBackgroundMerger ${HEPMC3_ROOTIO_LIB} ${HEPMC3_LIB} deduce_reader_wrapper)
 target_include_directories(SignalBackgroundMerger
   PRIVATE
-  ${HEPMC3_INCLUDE_DIR}
+  "${HEPMC3_INCLUDE_DIR}"
   include/HEPMC_Merger
   include/argparse
 )
 
-  
 #----------------------------------------------------------------------------
 # Install the executable to 'bin' directory under CMAKE_INSTALL_PREFIX
 #
@@ -62,6 +56,3 @@ install(EXPORT SignalBackgroundMerger-export
   DESTINATION
   cmake
   )
-
-
-

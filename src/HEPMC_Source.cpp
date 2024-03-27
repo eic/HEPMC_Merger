@@ -1,14 +1,15 @@
 
 #include "HEPMC_Source.h"
-#include <HepMC3/ReaderFactory.h>
+
+extern std::unique_ptr<HepMC3::Reader> deduce_reader_wrapper(const std::string& filename);
 
 // ---------------------------------------------------------------------------
-//Constructor
+// Constructor
 // ---------------------------------------------------------------------------
 HEPMC_Source::HEPMC_Source(std::string fileName, double freq, int sourceNo): m_fileName(fileName), m_freq(freq), m_sourceNo(sourceNo){
     
     try {
-        adapter = HepMC3::deduce_reader(m_fileName);
+        adapter = deduce_reader_wrapper(m_fileName);
         if (!adapter) {
             throw std::runtime_error("Failed to open file");
         }
