@@ -1,4 +1,6 @@
+
 #include "HEPMC_Source.h"
+#include <HepMC3/ReaderFactory.h>
 
 // ---------------------------------------------------------------------------
 //Constructor
@@ -45,13 +47,13 @@ void HEPMC_Source::SetupWeights() {
     m_freq = (weightSum/eventList.size())*1e-9; // Calculate average frequency and convert to GHz
 
     // Create the distribution
-    weightedDist(weights);
+    weightedDist= std::discrete_distribution<>(weights.begin(), weights.end());
 }
 
 // ---------------------------------------------------------------------------
 // Generate a timeline of event times
 // ---------------------------------------------------------------------------
-std::vector<double> HEPMC_Source::GenerateSampleTimes(double intWindow, double bunchSpacing) {
+std::vector<double> HEPMC_Source::GenerateSampleTimes(double intWindow, double bunchSpacing, std::mt19937 rng) {
     
     int nEvents = 0;
     if (m_freq == 0){
@@ -64,23 +66,43 @@ std::vector<double> HEPMC_Source::GenerateSampleTimes(double intWindow, double b
 
     std::vector<double> timeline;
     
-    // Set up the distribution
+    // Fill the timeline
     if(bunchCorrelated) {
         int nBunches = int(intWindow/bunchSpacing);
         std::uniform_int_distribution<>  dist(0, nBunches);
+        for(int i = 0; i < nEvents; i++) {
+            double time = dist(rng);
+            time *= bunchSpacing;
+            timeline.push_back(time);
+        }
     }
     else {
         std::uniform_real_distribution<> dist(0, intWindow);
-    }
-
-    // Generate the timeline
-    for(int i = 0; i < nEvents; i++) {
-        double time = dist(rng);
-        if(bunchCorrelated) {
-            time *= bunchSpacing;
+        for(int i = 0; i < nEvents; i++) {
+            double time = dist(rng);
+            timeline.push_back(time);
         }
-        timeline.push_back(time);
     }
 
     return timeline;
+}
+
+// ---------------------------------------------------------------------------
+// Get the next event
+// ---------------------------------------------------------------------------
+HepMC3::GenEvent HEPMC_Source::getNextEvent(std::mt19937 rng) {
+    HepMC3::GenEvent evt(HepMC3::Units::GEV,HepMC3::Units::MM);
+    if(isWeighted) {
+        evt = eventList[weightedDist(rng)];
+    } else {
+        while (!adapter->failed()) {
+            adapter->read_event(evt);
+            if (evt.weight() <= 0) continue;
+            break;
+        }
+        if (adapter->failed()) {
+            throw std::runtime_error("Failed to read event");
+        }
+    }
+    return evt;
 }

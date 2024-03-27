@@ -1,7 +1,10 @@
+#pragma once
 
 #include <string>
 #include <vector>
 #include <random>
+#include <memory>
+#include <HepMC3/ReaderFactory.h>
 
 class HEPMC_Source {
 
@@ -17,12 +20,13 @@ public:
     inline bool        getIsBunchCorrelated() const { return bunchCorrelated; }
 
     void SetupWeights();
-    std::vector<double> GenerateSampleTimes(double intWindow, double bunchSpacing = 0);
+    std::vector<double> GenerateSampleTimes(double intWindow, double bunchSpacing, std::mt19937 rng);
+    HepMC3::GenEvent getNextEvent(std::mt19937 rng);
 
 private:
     std::shared_ptr<HepMC3::Reader> adapter;
 
-    string m_fileName;
+    const std::string& m_fileName;
     double m_freq; // frequency of the source kHz
     int    m_sourceNo; // source reference number
 

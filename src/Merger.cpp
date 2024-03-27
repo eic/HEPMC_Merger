@@ -1,4 +1,5 @@
 #include "Merger.h"
+#include <sys/resource.h>
 
 // ---------------------------------------------------------------------------
 // Constructor
@@ -11,15 +12,8 @@ Merger::Merger(std::string outputFile, bool rootFormat, double intWindow, int rn
     // initialize rng
     rng.seed( rngSeed );
     
-    // Set up the uniform range
-    uniformDist(0, intWindow);
-
-    // Set up descrete range
-    int nBunches = int(intWindow / bunchSpacing);
-    discreteDist(0, nBunches);
-
     // Setup output file 
-    if (fileName.empty()) {
+    if (outputFileName.empty()) {
         if(rootFormat) outputFileName = "bgmerged.root";
         else outputFileName = "bgmerged.hepmc";
     }
@@ -31,7 +25,7 @@ Merger::Merger(std::string outputFile, bool rootFormat, double intWindow, int rn
         outFile = std::make_shared<HepMC3::WriterAscii>(outputFileName);
     }
 
-    cout << "Writing to " << outputFileName << endl;
+    std::cout << "Writing to " << outputFileName << std::endl;
 
     // // DEBUG
     // f = new TFile("f.root","RECREATE");
@@ -54,12 +48,12 @@ void Merger::merge(int nSlices) {
     auto t1 = std::chrono::high_resolution_clock::now();
 
     // Print banner
-    banner(nSlices);
+    printBanner(nSlices);
 
     // Slice loop
     int i = 0;
     for (i = 0; i<nSlices; ++i ) {
-        if (i % 100 == 0 || verbose ) squawk(i);
+        if (i % 100 == 0 || m_verbose ) squawk(i);
         auto hepSlice = mergeSlice(i);
         if (!hepSlice) {
         std::cout << "Exhausted signal source." << std::endl;
@@ -114,7 +108,7 @@ std::unique_ptr<HepMC3::GenEvent> Merger::mergeSlice(int i) {
 // ---------------------------------------------------------------------------
 // Print banner  
 // ---------------------------------------------------------------------------
-void Merger::printBanner(){
+void Merger::printBanner(int nSlices){
     std::cout << "==================================================================" << std::endl;
     std::cout << "=== EPIC HEPMC MERGER ===" << std::endl;
     std::cout << "authors: Benjamen Sterwerf* (bsterwerf@berkeley.edu), Kolja Kauder** (kkauder@bnl.gov), Reynier Cruz-Torres***" << std::endl;
@@ -123,7 +117,7 @@ void Merger::printBanner(){
     std::cout << "*** formerly Lawrence Berkeley National Laboratory" << std::endl;
     std::cout << "\nFor more information, run \n./signal_background_merger --help" << std::endl;
 
-    std::cout << "Number of Slices:" << nSlices << endl;
+    std::cout << "Number of Slices:" << nSlices << std::endl;
     std::string freqTerm = sources[0].getFreq() > 0 ? std::to_string(sources[0].getFreq()) + " kHz" : "(one event per time slice)";
     std::cout << "Signal events file and frequency:\n";
     std::cout << "\t- " << sources[0].getFileName() << "\t" << freqTerm << "\n";
@@ -147,7 +141,7 @@ void Merger::addSource(const std::string fileName, double freq, int sourceNo) {
 // ---------------------------------------------------------------------------
 // squark
 // ---------------------------------------------------------------------------
-void Merger::squawk(int i); {
+void Merger::squawk(int i) {
     struct rusage r_usage;
     // NOTE: Reported in kB on Linux, bytes in Mac/Darwin
     // Could try to explicitly catch __linux__ as well
@@ -170,36 +164,16 @@ void Merger::squawk(int i); {
 void Merger::addEvents(HEPMC_Source& source, std::unique_ptr<HepMC3::GenEvent>& hepSlice) {
     
     // First, create a timeline
-    std::vector<double> timeline = source.GenerateSampleTimes(m_intWindow);
+    std::vector<double> timeline = source.GenerateSampleTimes(m_intWindow,  m_bunchSpacing, rng);
     
-    if (verbose) std::cout << "Placing " << timeline.size() << " events from " << source.getFileName() << std::endl;
+    if (m_verbose) std::cout << "Placing " << timeline.size() << " events from " << source.getFileName() << std::endl;
     
     // Loop over the timeline
     for (auto time : timeline) {
         // Read the event
         HepMC3::GenEvent evt(HepMC3::Units::GEV,HepMC3::Units::MM);
-        if(source.isWeighted()) {
-            evt = source.eventList[source.weightedDist(rng)];
-        } else {
-            while (!source.adapter->failed()) {
-                source.adapter->read_event(evt);
-                if (evt.weight() <= 0) continue;
-                break;
-            }
-            if (source.adapter->failed()) {
-                std::cerr << "Failed to read event from " << source.getFileName() << std::endl;
-                exit(1);
-            }
-        }
-        while (!source.adapter->failed()) {
-            source.adapter->read_event(evt);
-            if (evt.weight() <= 0) continue;
-            break;
-        }
-        if (source.adapter->failed()) {
-            std::cerr << "Failed to read event from " << source.getFileName() << std::endl;
-            exit(1);
-        }
+
+        evt = source.getNextEvent(rng);
 
         insertHepmcEvent( evt, hepSlice, time);
     }
@@ -208,7 +182,7 @@ void Merger::addEvents(HEPMC_Source& source, std::unique_ptr<HepMC3::GenEvent>& 
     
 // ---------------------------------------------------------------------------
 void Merger::insertHepmcEvent( const HepMC3::GenEvent& inevt,
-            std::unique_ptr<HepMC3::GenEvent>& hepSlice, double time=0) {
+            std::unique_ptr<HepMC3::GenEvent>& hepSlice, double time) {
     // Unit conversion
     double timeHepmc = c_light * time;
 

@@ -1,10 +1,12 @@
 
-using std::cout;
-using std::cerr;
-using std::endl;
-using std::string;
-
+#pragma once
+#include <iostream>
+#include <chrono>
+#include <string>
+#include <random>
 #include "HEPMC_Source.h"
+#include <HepMC3/WriterAscii.h>
+#include <HepMC3/WriterRootTree.h>
 
 // =============================================================
 /**
@@ -18,13 +20,6 @@ using std::string;
 **/    
 class Merger {
 
-private:
-  // more private data at the end; pulling these more complicated objects up for readability
-  
-  // std::map<std::string, std::pair< std::shared_ptr<HepMC3::Reader>,double> > sigDict;
-  // std::map<std::string, std::pair< std::shared_ptr<HepMC3::Reader>,double> > freqDict;
-  
-
 public:
     // Constructor
   Merger(std::string outputFile, bool rootFormat, double intWindow, int rngSeed, bool verbose, bool squashTime, double bunchSpacing);
@@ -36,6 +31,8 @@ public:
   // Add data source
   // ---------------------------------------------------------------------------
   void addSource(const std::string fileName, double freq, int sourceNo);
+
+  void addEvents(HEPMC_Source&, std::unique_ptr<HepMC3::GenEvent>&);
 
   // ---------------------------------------------------------------------------
   void squawk(int i);
@@ -60,12 +57,5 @@ public:
     const double c_light = 299.792458; // speed of light = 299.792458 mm/ns to get mm
 
     std::vector<HEPMC_Source> sources;
-    
-
-  // // DEBUG  
-  // TFile *f;
-  // TH1I* p;
-  // TH1I* e;
-
-  
+      
 };
