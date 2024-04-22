@@ -6,7 +6,7 @@ extern std::unique_ptr<HepMC3::Reader> deduce_reader_wrapper(const std::string& 
 // ---------------------------------------------------------------------------
 // Constructor
 // ---------------------------------------------------------------------------
-HEPMC_Source::HEPMC_Source(std::string fileName, double freq, int sourceNo): m_fileName(fileName), m_freq(freq), m_sourceNo(sourceNo){
+HEPMC_Source::HEPMC_Source(std::string fileName, double freq, int sourceNo, int beamCorrelation): m_fileName(fileName), m_freq(freq), m_sourceNo(sourceNo), m_beamCorrelation(beamCorrelation) {
     
     try {
         adapter = deduce_reader_wrapper(m_fileName);
@@ -70,7 +70,7 @@ std::vector<double> HEPMC_Source::GenerateSampleTimes(double intWindow, double b
     std::vector<double> timeline;
     
     // Fill the timeline
-    if(bunchCorrelated) {
+    if(m_bunchCorrelated) {
         int nBunches = int(intWindow/bunchSpacing);
         std::uniform_int_distribution<>  dist(0, nBunches);
         for(int i = 0; i < nEvents; i++) {

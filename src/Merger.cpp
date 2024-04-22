@@ -133,9 +133,9 @@ void Merger::printBanner(int nSlices){
 // ---------------------------------------------------------------------------
 // Add data source
 // ---------------------------------------------------------------------------
-void Merger::addSource(const std::string fileName, double freq, int sourceNo) {
+void Merger::addSource(const std::string fileName, double freq, int sourceNo, int beamCorrelation) {
     if (fileName.empty()) return;
-    sources.push_back(HEPMC_Source(fileName, freq, sourceNo));
+    sources.push_back(HEPMC_Source(fileName, freq, sourceNo, beamCorrelation));
 }
 
 // ---------------------------------------------------------------------------
@@ -163,11 +163,13 @@ void Merger::squawk(int i) {
 // --------------------------------------------------------------------------- 
 void Merger::addEvents(HEPMC_Source& source, std::unique_ptr<HepMC3::GenEvent>& hepSlice) {
     
-    // First, create a timeline
+    // Create a timeline of IP correlated times
     std::vector<double> timeline = source.GenerateSampleTimes(m_intWindow,  m_bunchSpacing, rng);
     
     if (m_verbose) std::cout << "Placing " << timeline.size() << " events from " << source.getFileName() << std::endl;
     
+    int sourceID = source.getSourceNo();
+
     // Loop over the timeline
     for (auto time : timeline) {
         // Read the event
@@ -175,14 +177,26 @@ void Merger::addEvents(HEPMC_Source& source, std::unique_ptr<HepMC3::GenEvent>& 
 
         evt = source.getNextEvent(rng);
 
-        insertHepmcEvent( evt, hepSlice, time);
+        // Shift time time based on the z position of the vertex, the speed of light and the beam correlation
+        // Needs fixing to proper values which should be passed as configuration based on energy and mass of the particles
+        if (source.getBeamCorrelation() == 1) {
+            // Electron correlation
+            time += evt.vertices().front()->position().z() / c_light;
+        } else if (source.getBeamCorrelation() == 2) {
+            // Ion correlation
+            time -= evt.vertices().front()->position().z() / c_light;
+        }
+
+
+        // Insert the event into the slice
+        insertHepmcEvent( evt, hepSlice, time, sourceID );
     }
 }
 
     
 // ---------------------------------------------------------------------------
 void Merger::insertHepmcEvent( const HepMC3::GenEvent& inevt,
-            std::unique_ptr<HepMC3::GenEvent>& hepSlice, double time) {
+            std::unique_ptr<HepMC3::GenEvent>& hepSlice, double time, int sourceID) {
     // Unit conversion
     double timeHepmc = c_light * time;
 
@@ -195,7 +209,8 @@ void Merger::insertHepmcEvent( const HepMC3::GenEvent& inevt,
         HepMC3::FourVector position = vertex->position();
         position.set_t(position.t() + timeHepmc);
         auto v1 = std::make_shared<HepMC3::GenVertex>(position);
-        vertices.push_back(v1);
+        v1->set_status(sourceID); // Before any convention is decided on, just set based on source ID
+        vertices.push_back(v1);        
     }
         
     // copies the particles and attaches them to their corresponding vertices
@@ -208,15 +223,15 @@ void Merger::insertHepmcEvent( const HepMC3::GenEvent& inevt,
         particles.push_back(p1);
         // since the beam particles do not have a production vertex they cannot be attached to a production vertex
         if (particle->production_vertex()->id() < 0) {
-    int production_vertex = particle->production_vertex()->id();
-    vertices[abs(production_vertex) - 1]->add_particle_out(p1);
-    hepSlice->add_particle(p1);
+            int production_vertex = particle->production_vertex()->id();
+            vertices[abs(production_vertex) - 1]->add_particle_out(p1);
+            hepSlice->add_particle(p1);
         }
 
         // Adds particles with an end vertex to their end vertices
         if (particle->end_vertex()) {
-    int end_vertex = particle->end_vertex()->id();
-    vertices.at(abs(end_vertex) - 1)->add_particle_in(p1);	
+            int end_vertex = particle->end_vertex()->id();
+            vertices.at(abs(end_vertex) - 1)->add_particle_in(p1);	
         }
     }
 

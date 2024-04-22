@@ -33,7 +33,7 @@ public:
   // ---------------------------------------------------------------------------
   // Add data source
   // ---------------------------------------------------------------------------
-  void addSource(const std::string fileName, double freq, int sourceNo);
+  void addSource(const std::string fileName, double freq, int sourceNo, int beamCorrelation);
 
   void addEvents(HEPMC_Source&, std::unique_ptr<HepMC3::GenEvent>&);
 
@@ -44,7 +44,7 @@ public:
 
   // ---------------------------------------------------------------------------
   void insertHepmcEvent( const HepMC3::GenEvent& inevt,
-			 std::unique_ptr<HepMC3::GenEvent>& hepSlice, double time=0);
+			 std::unique_ptr<HepMC3::GenEvent>& hepSlice, double time=0, int sourceNo=0);
   
   private:
     std::shared_ptr<HepMC3::Writer> outFile;

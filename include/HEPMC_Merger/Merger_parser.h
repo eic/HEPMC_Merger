@@ -20,6 +20,11 @@ argparse::ArgumentParser* digestArgs(int argc, char* argv[]) {
     .default_value(0.0)
     .scan<'g', double>()
     .help("Signal frequency in kHz. Default is 0 to have exactly one signal event per slice. Set to the estimated DIS rate to randomize.");
+    
+  args->add_argument("-sc", "--signalCorrelation")
+    .default_value(0)
+    .scan<'i', int>()
+    .help("Correlate time with beam bunches. Default is 0. Set to 1 to correlate with electron bunches, 2 to correlate with ion bunches.");
   
   args->add_argument("-bg1", "--bg1File")
     .default_value(std::string("small_hgas_100GeV_HiAc_25mrad.Asciiv3.hepmc"))
@@ -30,6 +35,11 @@ argparse::ArgumentParser* digestArgs(int argc, char* argv[]) {
     .scan<'g', double>()
     .help("First background frequency in kHz. Default is the estimated hadron gas rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
   
+  args->add_argument("-bc1", "--bg1Correlation")
+    .default_value(1)
+    .scan<'i', int>()
+    .help("Correlate time with beam bunches. Default is 0. Set to 1 to correlate with electron bunches, 2 to correlate with ion bunches.");
+  
   args->add_argument("-bg2", "--bg2File")
     .default_value(std::string("small_beam_gas_ep_10GeV_foam_emin10keV_vtx.hepmc"))
     .help("Name of the second HEPMC file with background events");
@@ -38,7 +48,12 @@ argparse::ArgumentParser* digestArgs(int argc, char* argv[]) {
     .default_value(3177.25)
     .scan<'g', double>()
     .help("Second background frequency in kHz. Default is the estimated electron gas rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
-  
+
+  args->add_argument("-bc2", "--bg2Correlation")
+    .default_value(2)
+    .scan<'i', int>()
+    .help("Correlate time with beam bunches. Default is 0. Set to 1 to correlate with electron bunches, 2 to correlate with ion bunches.");
+    
   args->add_argument("-bg3", "--bg3File")
     .default_value(std::string("small_SR_single_2.5A_10GeV.hepmc"))
     .help("Name of the third HEPMC file with background events");
@@ -47,6 +62,11 @@ argparse::ArgumentParser* digestArgs(int argc, char* argv[]) {
     .default_value(0.0)
     .scan<'g', double>()
     .help("Third background frequency in kHz. Default is 0 to use the weights in the corresponding input file. Set to a value >0 to specify a frequency instead.");
+  
+  args->add_argument("-bc3", "--bg3Correlation")
+    .default_value(1)
+    .scan<'i', int>()
+    .help("Correlate time with beam bunches. Default is 0. Set to 1 to correlate with electron bunches, 2 to correlate with ion bunches.");
   
   args->add_argument("-o", "--outputFile")
     .default_value(std::string(""))

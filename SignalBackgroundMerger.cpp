@@ -25,19 +25,23 @@ int main(int argc, char* argv[]) {
   // Add sources
   std::string signalFile = args->get<std::string>("--signalFile");
   double signalFreq = args->get<double>("--signalFreq");
-  sbm.addSource(signalFile, signalFreq,0);
+  int signalCorrelation = args->get<int>("--signalCorrelation");
+  sbm.addSource(signalFile, signalFreq,0,signalCorrelation);
 
   std::string bg1File = args->get<std::string>("--bg1File");
   double bg1Freq = args->get<double>("--bg1Freq");
-  sbm.addSource(bg1File, bg1Freq,1);
+  int bg1Correlation = args->get<int>("--bg1Correlation");
+  sbm.addSource(bg1File, bg1Freq,1,bg1Correlation);
   
   std::string bg2File = args->get<std::string>("--bg2File");
   double bg2Freq = args->get<double>("--bg2Freq");
-  sbm.addSource(bg2File, bg2Freq,2);
+  int bg2Correlation = args->get<int>("--bg2Correlation");
+  sbm.addSource(bg2File, bg2Freq,2,bg2Correlation);
   
   std::string bg3File = args->get<std::string>("--bg3File");
   double bg3Freq = args->get<double>("--bg3Freq");
-  sbm.addSource(bg3File, bg3Freq,3);
+  int bg3Correlation = args->get<int>("--bg3Correlation");
+  sbm.addSource(bg3File, bg3Freq,3,bg3Correlation);
 
   // Merge the sources
   int  nSlices    = args->get<int>("--nSlices");
