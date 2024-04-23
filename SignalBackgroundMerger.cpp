@@ -53,7 +53,7 @@ private:
   // std::map<std::string, std::pair< std::shared_ptr<HepMC3::Reader>,double> > sigDict;
   // std::map<std::string, std::pair< std::shared_ptr<HepMC3::Reader>,double> > freqDict;
   std::shared_ptr<HepMC3::Reader> sigAdapter;
-  double sigFreq;
+  double sigFreq = 0;
   std::map<std::string, std::shared_ptr<HepMC3::Reader>> freqAdapters;
   std::map<std::string, double> freqs;
 
@@ -80,10 +80,10 @@ public:
     }
     cout << "Writing to " << outputFileName << endl;
 
-    PrepData ( signalFile, signalFreq, true );
-    PrepData ( bg1File, bg1Freq );
-    PrepData ( bg2File, bg2Freq );
-    PrepData ( bg3File, bg3Freq );
+    PrepData ( signalFile, signalFreq, signalSkip, true );
+    PrepData ( bg1File, bg1Freq, bg1Skip );
+    PrepData ( bg2File, bg2Freq, bg2Skip);
+    PrepData ( bg3File, bg3Freq, bg3Skip);
 
     // // DEBUG
     // f = new TFile("f.root","RECREATE");
@@ -154,6 +154,11 @@ public:
       .scan<'g', double>()
       .help("Signal frequency in kHz. Default is 0 to have exactly one signal event per slice. Set to the estimated DIS rate to randomize.");
     
+    args.add_argument("-S", "--signalSkip")
+      .default_value(0)
+    .scan<'i', int>()
+    .help("Number of signals events to skip. Default is 0.");
+
     args.add_argument("-bg1", "--bg1File")
       .default_value(std::string("small_hgas_100GeV_HiAc_25mrad.Asciiv3.hepmc"))
       .help("Name of the first HEPMC file with background events");
@@ -163,6 +168,11 @@ public:
       .scan<'g', double>()
       .help("First background frequency in kHz. Default is the estimated hadron gas rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
     
+    args.add_argument("-bg1S", "--bg1Skip")
+    .default_value(0)
+    .scan<'i', int>()
+    .help("Number of first background events to skip. Default is 0.");
+
     args.add_argument("-bg2", "--bg2File")
       .default_value(std::string("small_beam_gas_ep_10GeV_foam_emin10keV_vtx.hepmc"))
       .help("Name of the second HEPMC file with background events");
@@ -172,6 +182,11 @@ public:
       .scan<'g', double>()
       .help("Second background frequency in kHz. Default is the estimated electron gas rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
     
+    args.add_argument("-bg2S", "--bg2Skip")
+      .default_value(0)
+      .scan<'i', int>()
+      .help("Number of second background events to skip. Default is 0.");\
+
     args.add_argument("-bg3", "--bg3File")
       .default_value(std::string("small_SR_single_2.5A_10GeV.hepmc"))
       .help("Name of the third HEPMC file with background events");
@@ -179,6 +194,11 @@ public:
     args.add_argument("-bf3", "--bg3Freq")
       .default_value(0.0)
       .help("Third background frequency in kHz. Default is 0 to use the weights in the corresponding input file. Set to a value >0 to specify a frequency instead.");
+    
+    args.add_argument("-bg3S", "--bg3Skip")
+      .default_value(0)
+      .scan<'i', int>()
+      .help("Number of third background events to skip. Default is 0");
     
     args.add_argument("-o", "--outputFile")
       .default_value(std::string(""))
@@ -224,12 +244,19 @@ public:
     // Access arguments using args.get method
     signalFile = args.get<std::string>("--signalFile");
     signalFreq = args.get<double>("--signalFreq");
+    signalSkip = args.get<int>("--signalSkip");
+
     bg1File = args.get<std::string>("--bg1File");
     bg1Freq = args.get<double>("--bg1Freq");
+    bg1Skip = args.get<int>("--bg1Skip");
+
     bg2File = args.get<std::string>("--bg2File");
     bg2Freq = args.get<double>("--bg2Freq");
+    bg2Skip = args.get<int>("--bg2Skip");
+
     bg3File = args.get<std::string>("--bg3File");
     bg3Freq = args.get<double>("--bg3Freq");
+    bg3Skip = args.get<int>("--bg3Skip");
     
     outputFile = args.get<std::string>("--outputFile");
     rootFormat = args.get<bool>("--rootFormat");
@@ -238,8 +265,7 @@ public:
     squashTime = args.get<bool>("--squashTime");
     rngSeed    = args.get<int>("--rngSeed");
     verbose    = args.get<bool>("--verbose");
-
-      
+          
   }
   
   // ---------------------------------------------------------------------------
@@ -274,7 +300,7 @@ public:
   }
   
   // ---------------------------------------------------------------------------  
-  void PrepData(const std::string& fileName, double freq, bool signal=false) {
+  void PrepData(const std::string& fileName, double freq, int skip=0, bool signal=false) {
     if (fileName.empty()) return;
 
     cout << "Prepping " << fileName << endl;
@@ -282,7 +308,7 @@ public:
     try {
       adapter = HepMC3::deduce_reader(fileName);
       if (!adapter) {
-	throw std::runtime_error("Failed to open file");
+        throw std::runtime_error("Failed to open file");
       }
     } catch (const std::runtime_error& e) {
       std::cerr << "Opening " << fileName << " failed: " << e.what() << std::endl;
@@ -292,6 +318,7 @@ public:
     if (signal) {
       sigAdapter = adapter;
       sigFreq = freq;
+      sigAdapter->skip(skip);
       return;
     }
 
@@ -341,6 +368,7 @@ public:
     }
 
     // Not signal and not weighted --> prepare frequency backgrounds
+    adapter->skip(skip);
     freqAdapters[fileName] = adapter;
     freqs[fileName] = freq;
   }
@@ -392,6 +420,7 @@ public:
   std::unique_ptr<HepMC3::GenEvent> mergeSlice(int i) {
     auto hepSlice = std::make_unique<HepMC3::GenEvent>(HepMC3::Units::GEV, HepMC3::Units::MM);
     
+    cout << " --> " << sigAdapter << endl;
     addFreqEvents(signalFile, sigAdapter, sigFreq, hepSlice, true);
     
     for (const auto& freqBgs : freqAdapters) {
@@ -414,11 +443,12 @@ public:
     // First, create a timeline
     // Signals can be different
     std::vector<double> timeline;
+
     std::uniform_real_distribution<> uni(0, intWindow);
-    if (freq == 0) {
+    if (freq == 0){
       if (!signal) {
-	std::cerr << "frequency can't be 0 for background files" << std::endl;
-	exit(1);
+        std::cerr << "frequency can't be 0 for background files" << std::endl;
+        exit(1);
       }
       // exactly one signal event, at an arbitrary point
       timeline.push_back(uni(rng));
@@ -435,25 +465,22 @@ public:
     // auto np = d(rng);
     // p->Fill(np);
     // // /DEBUG
-    
-    
-    if (timeline.empty()) return;
 
+    if (timeline.empty()) return;
+  
     // Insert events at all specified locations
     for (double time : timeline) {
       if(adapter->failed()) {
-	try{
-	  if (signal) {
-	    // Exhausted signal events
-	    throw std::ifstream::failure("EOF");
-	  } else {
-	    // background file reached its end, reset to the start
-	    std::cout << "Cycling back to the start of " << fileName << std::endl;
-	    adapter->close();
-	    adapter = HepMC3::deduce_reader(fileName);
-	  }
-	} catch (std::ifstream::failure& e) {
-	  continue; // just need to suppress the error
+      try{
+        if (signal) { // Exhausted signal events
+	        throw std::ifstream::failure("EOF");
+	      } else { // background file reached its end, reset to the start
+	        std::cout << "Cycling back to the start of " << fileName << std::endl;
+	        adapter->close();
+	        adapter = HepMC3::deduce_reader(fileName);
+	      }
+	    } catch (std::ifstream::failure& e) {
+	        continue; // just need to suppress the error
         }
       }
 
@@ -503,8 +530,8 @@ public:
     std::uniform_real_distribution<> uni(0, intWindow);
     if (!squashTime) {
       for ( auto& e : toPlace ){
-	double time = squashTime ? 0 : uni(rng);
-	insertHepmcEvent( e, hepSlice, time);
+	      double time = squashTime ? 0 : uni(rng);
+	      insertHepmcEvent( e, hepSlice, time);
       }
     }
 
@@ -583,6 +610,7 @@ public:
   std::mt19937 rng;
   string signalFile, bg1File, bg2File, bg3File;
   double signalFreq, bg1Freq, bg2Freq, bg3Freq;
+  int signalSkip, bg1Skip, bg2Skip, bg3Skip;
   string outputFile;
   string outputFileName;
   bool rootFormat;
