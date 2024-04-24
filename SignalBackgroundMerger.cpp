@@ -193,6 +193,7 @@ public:
     
     args.add_argument("-bf3", "--bg3Freq")
       .default_value(0.0)
+      .scan<'g', double>()
       .help("Third background frequency in kHz. Default is 0 to use the weights in the corresponding input file. Set to a value >0 to specify a frequency instead.");
     
     args.add_argument("-bg3S", "--bg3Skip")
@@ -211,6 +212,7 @@ public:
 	
     args.add_argument("-w", "--intWindow")
       .default_value(2000.0)
+      .scan<'g', double>()
       .help("Length of the integration window in nanoseconds. Default is 2000.");
     
     args.add_argument("-N", "--nSlices")
@@ -420,7 +422,6 @@ public:
   std::unique_ptr<HepMC3::GenEvent> mergeSlice(int i) {
     auto hepSlice = std::make_unique<HepMC3::GenEvent>(HepMC3::Units::GEV, HepMC3::Units::MM);
     
-    cout << " --> " << sigAdapter << endl;
     addFreqEvents(signalFile, sigAdapter, sigFreq, hepSlice, true);
     
     for (const auto& freqBgs : freqAdapters) {
