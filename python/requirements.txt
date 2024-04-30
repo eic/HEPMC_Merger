@@ -1,0 +1,4 @@
+pyhepmc
+numpy
+pandas
+psutil
