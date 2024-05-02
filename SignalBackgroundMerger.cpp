@@ -1,3 +1,7 @@
+#ifdef __MACH__
+#include <mach/mach.h>
+#endif
+
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -49,20 +53,19 @@ class SignalBackgroundMerger {
 
 private:
   // more private data at the end; pulling these more complicated objects up for readability
-  
-  // std::map<std::string, std::pair< std::shared_ptr<HepMC3::Reader>,double> > sigDict;
-  // std::map<std::string, std::pair< std::shared_ptr<HepMC3::Reader>,double> > freqDict;
   std::shared_ptr<HepMC3::Reader> sigAdapter;
   double sigFreq = 0;
   std::map<std::string, std::shared_ptr<HepMC3::Reader>> freqAdapters;
   std::map<std::string, double> freqs;
 
-  // typedef std::pair<  > EventsAndWeights;
   std::map<std::string,
-	   std::tuple<std::vector<HepMC3::GenEvent>,
+	  std::tuple<std::vector<HepMC3::GenEvent>,
 		      std::piecewise_constant_distribution<>,
 		      double>
 	   > weightDict;
+
+  // just keep count of events placed, could be more sophisticated
+  std::map<std::string, int > infoDict;
 
 public:
 
@@ -126,6 +129,12 @@ public:
 
     std::cout << "Slice loop time: " << std::round(std::chrono::duration<double, std::chrono::minutes::period>(t2 - t1).count()) << " min" << std::endl;
     std::cout << " -- " << std::round(std::chrono::duration<double>(t2 - t1).count() / i) << " sec / slice" << std::endl;
+
+    for (auto info : infoDict) {
+      std::cout << "In total, placed " << info.second << " events from " << info.first << std::endl;
+      std::cout << "  --> on average " << info.second / nSlices << std::endl;
+      
+    }
 
     // clean up, close all files
     sigAdapter->close();
@@ -317,6 +326,8 @@ public:
       exit(1);
     }
     
+    infoDict[fileName] = 0;
+
     if (signal) {
       sigAdapter = adapter;
       sigFreq = freq;
@@ -404,18 +415,42 @@ public:
   // ---------------------------------------------------------------------------
   void squawk(int i) {
     struct rusage r_usage;
+    getrusage(RUSAGE_SELF, &r_usage);
+
     // NOTE: Reported in kB on Linux, bytes in Mac/Darwin
     // Could try to explicitly catch __linux__ as well
     // Unclear in BSD, I've seen conflicting reports
-    float mbsize = 1024;
+    // Add: Also trying more fine-grained info about current usage
 #ifdef __MACH__
-    mbsize = 1024 * 1024;
+    float mbsize = 1024 * 1024;
+
+    task_basic_info_data_t info;
+    mach_msg_type_number_t size = sizeof(info);
+    kern_return_t kerr = task_info(mach_task_self(),
+                                   TASK_BASIC_INFO,
+                                   (task_info_t)&info,
+                                   &size);
+
+    long memory_usage = -1;
+    if (kerr == KERN_SUCCESS) {
+      memory_usage = info.resident_size  / 1024 / 1024;
+    }
+#else // Linux
+    float mbsize; = 1024;
+    std::ifstream statm("/proc/self/statm");
+    long size, resident, share, text, lib, data, dt;
+    statm >> size >> resident >> share >> text >> lib >> data >> dt;
+    statm.close();
+
+    long page_size = sysconf(_SC_PAGESIZE);  // in case x86-64 is configured to use 2MB pages
+    long memory_usage = resident * page_size  / 1024 / 1024 ;    
 #endif
   
-    getrusage(RUSAGE_SELF, &r_usage);
     
     std::cout << "Working on slice " << i + 1 << std::endl;
     std::cout << "Resident Memory " << r_usage.ru_maxrss / mbsize << " MB" << std::endl;
+    std::cout << "Current memory usage: " << memory_usage << " MB" << std::endl;
+
   }
   // ---------------------------------------------------------------------------
 
@@ -459,6 +494,7 @@ public:
     }
     
     if ( verbose) std::cout << "Placing " << timeline.size() << " events from " << fileName << std::endl;
+    infoDict[fileName] += timeline.size();
 
     // // DEBUG
     // e->Fill(timeline.size());
@@ -490,8 +526,8 @@ public:
 
       if (squashTime) time = 0;
       insertHepmcEvent( inevt, hepSlice, time);
-      
     }
+
     return;
   }
 
@@ -517,6 +553,7 @@ public:
     }
 
     if (verbose) std::cout << "Placing " << nEvents << " events from " << fileName << std::endl;
+    infoDict[fileName] += nEvents;
 
     // Get randomized event indices
     // Note: Could change to drawing without replacing ( if ( not in toPLace) ...) , not worth the effort
