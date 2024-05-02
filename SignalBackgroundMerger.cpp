@@ -65,7 +65,7 @@ private:
 	   > weightDict;
 
   // just keep count of events placed, could be more sophisticated
-  std::map<std::string, int > infoDict;
+  std::map<std::string, long > infoDict;
 
 public:
 
@@ -136,6 +136,20 @@ public:
       
     }
 
+    struct rusage r_usage;
+    getrusage(RUSAGE_SELF, &r_usage);
+
+    // NOTE: Reported in kB on Linux, bytes in Mac/Darwin
+    // Could try to explicitly catch __linux__ as well
+    // Unclear in BSD, I've seen conflicting reports
+#ifdef __MACH__
+    float mbsize = 1024 * 1024;
+#else // Linux
+    float mbsize = 1024;
+#endif
+  
+
+    std::cout << endl << "Maximum Resident Memory " << r_usage.ru_maxrss / mbsize << " MB" << std::endl;
     // clean up, close all files
     sigAdapter->close();
     for (auto& it : freqAdapters) {
@@ -436,7 +450,7 @@ public:
       memory_usage = info.resident_size  / 1024 / 1024;
     }
 #else // Linux
-    float mbsize; = 1024;
+    float mbsize = 1024;
     std::ifstream statm("/proc/self/statm");
     long size, resident, share, text, lib, data, dt;
     statm >> size >> resident >> share >> text >> lib >> data >> dt;
