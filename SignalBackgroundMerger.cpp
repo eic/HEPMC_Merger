@@ -428,16 +428,9 @@ public:
 
   // ---------------------------------------------------------------------------
   void squawk(int i) {
-    struct rusage r_usage;
-    getrusage(RUSAGE_SELF, &r_usage);
 
-    // NOTE: Reported in kB on Linux, bytes in Mac/Darwin
-    // Could try to explicitly catch __linux__ as well
-    // Unclear in BSD, I've seen conflicting reports
-    // Add: Also trying more fine-grained info about current usage
+    // More fine-grained info about current usage
 #ifdef __MACH__
-    float mbsize = 1024 * 1024;
-
     task_basic_info_data_t info;
     mach_msg_type_number_t size = sizeof(info);
     kern_return_t kerr = task_info(mach_task_self(),
@@ -450,7 +443,6 @@ public:
       memory_usage = info.resident_size  / 1024 / 1024;
     }
 #else // Linux
-    float mbsize = 1024;
     std::ifstream statm("/proc/self/statm");
     long size, resident, share, text, lib, data, dt;
     statm >> size >> resident >> share >> text >> lib >> data >> dt;
@@ -462,7 +454,6 @@ public:
   
     
     std::cout << "Working on slice " << i + 1 << std::endl;
-    std::cout << "Resident Memory " << r_usage.ru_maxrss / mbsize << " MB" << std::endl;
     std::cout << "Current memory usage: " << memory_usage << " MB" << std::endl;
 
   }
