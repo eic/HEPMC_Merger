@@ -64,8 +64,12 @@ private:
 		      double>
 	   > weightDict;
 
-  // just keep count of events placed, could be more sophisticated
-  std::map<std::string, long > infoDict;
+  // just keep count of some numbers, could be more sophisticated
+  typedef struct{
+    long eventCount;
+    long particleCount;
+  } stats;
+  std::map<std::string, stats > infoDict;
 
 public:
 
@@ -128,11 +132,14 @@ public:
     auto t2 = std::chrono::high_resolution_clock::now();
 
     std::cout << "Slice loop time: " << std::round(std::chrono::duration<double, std::chrono::minutes::period>(t2 - t1).count()) << " min" << std::endl;
-    std::cout << " -- " << std::round(std::chrono::duration<double>(t2 - t1).count() / i) << " sec / slice" << std::endl;
+    std::cout << " -- " << std::round(std::chrono::duration<double, std::chrono::microseconds::period>(t2 - t1).count() / i) << " us / slice" << std::endl;
 
     for (auto info : infoDict) {
-      std::cout << "In total, placed " << info.second << " events from " << info.first << std::endl;
-      std::cout << "  --> on average " << info.second / nSlices << std::endl;
+      std::cout << "From " << info.first << std::endl;
+      std::cout << "  placed " << info.second.eventCount << " events" << std::endl; 
+      std::cout << "  --> on average " << info.second.eventCount / nSlices << std::endl;
+      std::cout << "  placed " << info.second.particleCount << " final state particles" << std::endl;
+      std::cout << "  --> on average " << info.second.particleCount / nSlices << std::endl;
       
     }
 
@@ -340,7 +347,7 @@ public:
       exit(1);
     }
     
-    infoDict[fileName] = 0;
+    infoDict[fileName] = {0,0};
 
     if (signal) {
       sigAdapter = adapter;
@@ -499,7 +506,6 @@ public:
     }
     
     if ( verbose) std::cout << "Placing " << timeline.size() << " events from " << fileName << std::endl;
-    infoDict[fileName] += timeline.size();
 
     // // DEBUG
     // e->Fill(timeline.size());
@@ -509,7 +515,8 @@ public:
     // // /DEBUG
 
     if (timeline.empty()) return;
-  
+    long particleCount = 0;
+
     // Insert events at all specified locations
     for (double time : timeline) {
       if(adapter->failed()) {
@@ -530,8 +537,12 @@ public:
       adapter->read_event(inevt);
 
       if (squashTime) time = 0;
-      insertHepmcEvent( inevt, hepSlice, time);
+      particleCount += insertHepmcEvent( inevt, hepSlice, time);
     }
+
+    infoDict[fileName].eventCount += timeline.size();
+    infoDict[fileName].particleCount += particleCount;
+
 
     return;
   }
@@ -558,8 +569,7 @@ public:
     }
 
     if (verbose) std::cout << "Placing " << nEvents << " events from " << fileName << std::endl;
-    infoDict[fileName] += nEvents;
-
+    
     // Get randomized event indices
     // Note: Could change to drawing without replacing ( if ( not in toPLace) ...) , not worth the effort
     std::vector<HepMC3::GenEvent> toPlace(nEvents);
@@ -571,18 +581,22 @@ public:
     // Place at random times
     std::vector<double> timeline;
     std::uniform_real_distribution<> uni(0, intWindow);
+    long particleCount = 0;
     if (!squashTime) {
       for ( auto& e : toPlace ){
 	      double time = squashTime ? 0 : uni(rng);
-	      insertHepmcEvent( e, hepSlice, time);
+        particleCount += insertHepmcEvent( e, hepSlice, time);
       }
     }
+
+    infoDict[fileName].eventCount += nEvents;
+    infoDict[fileName].particleCount += particleCount;
 
     return;
 }
 
   // ---------------------------------------------------------------------------
-  void insertHepmcEvent( const HepMC3::GenEvent& inevt,
+  long insertHepmcEvent( const HepMC3::GenEvent& inevt,
 			 std::unique_ptr<HepMC3::GenEvent>& hepSlice, double time=0) {
     // Unit conversion
     double timeHepmc = c_light * time;
@@ -600,18 +614,20 @@ public:
     }
       
     // copies the particles and attaches them to their corresponding vertices
+    long finalParticleCount = 0;
     for (auto& particle : inevt.particles()) {
       HepMC3::FourVector momentum = particle->momentum();
       int status = particle->status();
+      if (status == 1 ) finalParticleCount++;
       int pid = particle->pid();
       auto p1 = std::make_shared<HepMC3::GenParticle> (momentum, pid, status);
       p1->set_generated_mass(particle->generated_mass());
       particles.push_back(p1);
       // since the beam particles do not have a production vertex they cannot be attached to a production vertex
       if (particle->production_vertex()->id() < 0) {
-	int production_vertex = particle->production_vertex()->id();
-	vertices[abs(production_vertex) - 1]->add_particle_out(p1);
-	hepSlice->add_particle(p1);
+	      int production_vertex = particle->production_vertex()->id();
+	      vertices[abs(production_vertex) - 1]->add_particle_out(p1);
+	      hepSlice->add_particle(p1);
       }
 	
       // Adds particles with an end vertex to their end vertices
@@ -626,6 +642,7 @@ public:
       hepSlice->add_vertex(vertex);
     }
     
+    return finalParticleCount;
   }
 
   // ---------------------------------------------------------------------------
