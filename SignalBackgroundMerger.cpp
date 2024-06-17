@@ -27,12 +27,6 @@
 
 #include "argparse/argparse.hpp"
 
-// DEBUG
-#include <TH1D.h>
-#include <TH1I.h>
-#include <TF1.h>
-#include <TFile.h>
-
 using std::cout;
 using std::cerr;
 using std::endl;
@@ -45,8 +39,8 @@ using std::string;
     
     Typical usage:
     ./SignalBackgroundMerger --signalFile dis.hepmc --signalFreq 0 \
-            --bg1File hgas.hepmc --bg1Freq 1852 \
-            --bg2File egas.hepmc --bg2Freq 1852 \
+            --bg1File hgas.hepmc --bg1Freq 31.9 \
+            --bg2File egas.hepmc --bg2Freq 3177.25 \
             --bg3File sr.hepmc
 **/    
 class SignalBackgroundMerger {
@@ -91,12 +85,6 @@ public:
     PrepData ( bg1File, bg1Freq, bg1Skip );
     PrepData ( bg2File, bg2Freq, bg2Skip);
     PrepData ( bg3File, bg3Freq, bg3Skip);
-
-    // // DEBUG
-    // f = new TFile("f.root","RECREATE");
-    // p = new TH1I("p","poisson",20,-1,19);
-    // e = new TH1I("e","exponential",20,-1,19);
-    // // /DEBUG
     
     auto t1 = std::chrono::high_resolution_clock::now();
     std::cout << "Initiation time: " << std::round(std::chrono::duration<double, std::chrono::seconds::period>(t1 - t0).count()) << " sec" << std::endl;
@@ -176,7 +164,7 @@ public:
     argparse::ArgumentParser args ("Merge signal events with up to three background sources.");
     
     args.add_argument("-i", "--signalFile")
-      .default_value(std::string("small_ep_noradcor.10x100_q2_10_100_run001.hepmc"))
+      .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run1.ab.hepmc3.tree.root"))
       .help("Name of the HEPMC file with the signal events");
     
     args.add_argument("-sf", "--signalFreq")
@@ -190,11 +178,11 @@ public:
     .help("Number of signals events to skip. Default is 0.");
 
     args.add_argument("-bg1", "--bg1File")
-      .default_value(std::string("small_hgas_100GeV_HiAc_25mrad.Asciiv3.hepmc"))
+      .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/proton/pythia8.306-1.0/100GeV/pythia8.306-1.0_ProtonBeamGas_100GeV_run082.hepmc3.tree.root"))
       .help("Name of the first HEPMC file with background events");
     
     args.add_argument("-bf1", "--bg1Freq")
-      .default_value(342.8)
+      .default_value( 31.9 )
       .scan<'g', double>()
       .help("First background frequency in kHz. Default is the estimated hadron gas rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
     
@@ -204,7 +192,7 @@ public:
     .help("Number of first background events to skip. Default is 0.");
 
     args.add_argument("-bg2", "--bg2File")
-      .default_value(std::string("small_beam_gas_ep_10GeV_foam_emin10keV_vtx.hepmc"))
+      .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/electron/beam_gas_ep_10GeV_foam_emin10keV_30Mevt.hepmc3.tree.root"))
       .help("Name of the second HEPMC file with background events");
     
     args.add_argument("-bf2", "--bg2Freq")
@@ -218,7 +206,7 @@ public:
       .help("Number of second background events to skip. Default is 0.");\
 
     args.add_argument("-bg3", "--bg3File")
-      .default_value(std::string("small_SR_single_2.5A_10GeV.hepmc"))
+      .default_value(std::string(""))
       .help("Name of the third HEPMC file with background events");
     
     args.add_argument("-bf3", "--bg3Freq")
@@ -232,13 +220,13 @@ public:
       .help("Number of third background events to skip. Default is 0");
     
     args.add_argument("-o", "--outputFile")
-      .default_value(std::string(""))
-      .help("Specify the output file name. By default it will be auto-generated.");
+      .default_value(std::string("bgmerged.hepmc3.tree.root"))
+      .help("Specify the output file name. By default bgmerged.hepmc3.tree.root is used");
 
     args.add_argument("-r", "--rootFormat")
-      .default_value(false)
+      .default_value(true)
       .implicit_value(true)
-      .help("Use hepmc.root output format, default is false.");
+      .help("Use hepmc.root output format, default is true.");
 	
     args.add_argument("-w", "--intWindow")
       .default_value(2000.0)
@@ -363,16 +351,14 @@ public:
       std::vector<double> weights;
 
       while(!adapter->failed()) {
-	HepMC3::GenEvent evt(HepMC3::Units::GEV,HepMC3::Units::MM);
-	adapter->read_event(evt);
-	// HepMC3::Print::listing(evt);
-	// HepMC3::Print::content(evt);
+	    HepMC3::GenEvent evt(HepMC3::Units::GEV,HepMC3::Units::MM);
+	    adapter->read_event(evt);
 
-	// remove events with 0 weight - note that this does change avgRate = <weight> (by a little)
-	if (double w=evt.weight() > 0){
-	  events.push_back(evt);
-	  weights.push_back(evt.weight());
-	}
+    	// remove events with 0 weight - note that this does change avgRate = <weight> (by a little)
+	    if (double w=evt.weight() > 0){
+	      events.push_back(evt);
+	      weights.push_back(evt.weight());
+	      }
       }
       adapter->close();
       
@@ -407,7 +393,6 @@ public:
     freqs[fileName] = freq;
   }
 
-
    // ---------------------------------------------------------------------------
   bool hasEnding (std::string const &fullString, std::string const &ending) {
     if (fullString.length() >= ending.length()) {
@@ -419,6 +404,8 @@ public:
   
   // ---------------------------------------------------------------------------
   std::string nameGen() {
+    // Generate a name for the output file
+    // It's too simplistic for input with directories
     std::string name = signalFile;
     if (nSlices > 0) {
         size_t pos = name.find(".hepmc");
@@ -431,7 +418,7 @@ public:
     }
     name = "bgmerged_" + name;
     return name;
-}
+  }
 
   // ---------------------------------------------------------------------------
   void squawk(int i) {
@@ -507,13 +494,6 @@ public:
     
     if ( verbose) std::cout << "Placing " << timeline.size() << " events from " << fileName << std::endl;
 
-    // // DEBUG
-    // e->Fill(timeline.size());
-    // std::poisson_distribution<> d( freq*1e-6 * intWindow );
-    // auto np = d(rng);
-    // p->Fill(np);
-    // // /DEBUG
-
     if (timeline.empty()) return;
     long particleCount = 0;
 
@@ -561,9 +541,9 @@ public:
     while (true) {
       nEvents = d(rng);
       if (nEvents > events.size()) {
-	std::cout << "WARNING: Trying to place " << nEvents << " events from " << fileName
-       		  << " but the file doesn't have enough. Rerolling, but this is not physical." << std::endl;
-	continue;
+	      std::cout << "WARNING: Trying to place " << nEvents << " events from " << fileName
+       	      	  << " but the file doesn't have enough. Rerolling, but this is not physical." << std::endl;
+      	continue;
       }
       break;
     }
@@ -632,8 +612,8 @@ public:
 	
       // Adds particles with an end vertex to their end vertices
       if (particle->end_vertex()) {
-	int end_vertex = particle->end_vertex()->id();
-	vertices.at(abs(end_vertex) - 1)->add_particle_in(p1);	
+	      int end_vertex = particle->end_vertex()->id();
+	      vertices.at(abs(end_vertex) - 1)->add_particle_in(p1);	
       }
     }
 
@@ -680,14 +660,7 @@ public:
   int rngSeed;  // should be unsigned, but argparse cannot read that
   bool verbose;
   
-  const double c_light = 299.792458; // speed of light = 299.792458 mm/ns to get mm
-
-  // // DEBUG  
-  // TFile *f;
-  // TH1I* p;
-  // TH1I* e;
-
-  
+  const double c_light = 299.792458; // speed of light = 299.792458 mm/ns to get mm  
 };
 
 // =============================================================
@@ -700,30 +673,8 @@ int main(int argc, char* argv[]) {
 
   sbm.merge();
 
-  // // DEBUG
-  // auto f = new TFile("f.root","RECREATE");
-  // auto p = new TH1I("p","poisson",100,-1,99);
-  // auto e = new TH1I("e","exponential",100,-1,99);
-  // int N = 100000;
-  // float rate = 20;
-  // float length = 2;
-  // std::poisson_distribution<> d( rate * length );
-  
-  // for (int i=0; i< N; ++i){
-  //   auto np = d(sbm.rng);
-  //   p->Fill(np);
-  //   auto pTimes = sbm.poissonTimes(rate, length);
-  //   auto ne = pTimes.size();
-  //   e->Fill(ne);
-  //   // cout << np << "  " << ne << endl;
-  // }
-  // sbm.p->Write();
-  // sbm.e->Write();  
-  // sbm.f->Close();
-
   std::cout << "\n==================================================================\n";
   std::cout << "Overall running time: " << std::round(std::chrono::duration<double, std::chrono::minutes::period>(std::chrono::high_resolution_clock::now() - t0).count()) << " min" << std::endl;
-  
   
   return 0;
 }
