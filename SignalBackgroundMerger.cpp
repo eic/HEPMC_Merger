@@ -234,9 +234,9 @@ public:
       .help("Length of the integration window in nanoseconds. Default is 2000.");
     
     args.add_argument("-N", "--nSlices")
-      .default_value(-1)
+      .default_value(10000)
       .scan<'i', int>()
-      .help("Number of sampled time slices ('events'). Default is -1. If set to -1, all events in the signal file will be used and background files cycled as needed.");
+      .help("Number of sampled time slices ('events'). Default is 10000. If set to -1, all events in the signal file will be used and background files cycled as needed.");
     
     args.add_argument("--squashTime")
       .default_value(false)
