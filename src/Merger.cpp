@@ -88,19 +88,7 @@ std::unique_ptr<HepMC3::GenEvent> Merger::mergeSlice(int i) {
 
     for (auto source : sources) {
         addEvents(source, hepSlice);
-    }
-    
-
-    // addFreqEvents(signalFile, sigAdapter, sigFreq, hepSlice, true);
-
-    // for (const auto& freqBgs : freqAdapters) {
-    //     auto fileName=freqBgs.first;
-    //     addFreqEvents(fileName, freqAdapters[fileName], freqs[fileName], hepSlice);
-    // }
-
-    // for (const auto& fileName : weightDict) {
-    //     addWeightedEvents(fileName.first, hepSlice);
-    // }
+    }    
 
     return hepSlice;
 }
@@ -126,7 +114,7 @@ void Merger::printBanner(int nSlices){
     for(auto it = sources.begin() + 1; it != sources.end(); ++it) {
         auto& source = *it;
         freqTerm = source.getFreq() > 0 ? std::to_string(source.getFreq()) + " kHz" : "(one event per time slice)";
-        std::cout << "\t- " << source.getFileName() << "\t" << freqTerm << " kHz" << "\n";
+        std::cout << "\t- " << source.getFileName() << "\t" << freqTerm << "\n";
     }
 }
 

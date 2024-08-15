@@ -37,11 +37,14 @@ void HEPMC_Source::SetupWeights() {
     double weightSum = 0;
     while (!adapter->failed()) {
         HepMC3::GenEvent evt(HepMC3::Units::GEV,HepMC3::Units::MM);
+        adapter->read_event(evt);
+
         if(evt.weight() <= 0) continue;
         
         eventList.push_back(evt);
         weights.push_back(evt.weight());
         weightSum += evt.weight();
+
     }
     
     m_freq = (weightSum/eventList.size())*1e-9; // Calculate average frequency and convert to GHz
@@ -97,11 +100,11 @@ HepMC3::GenEvent HEPMC_Source::getNextEvent(std::mt19937 rng) {
     } else {
         while (!adapter->failed()) {
             adapter->read_event(evt);
-            if (evt.weight() <= 0) continue;
+            // if (evt.weight() <= 0) continue;
             break;
         }
         if (adapter->failed()) {
-            throw std::runtime_error("Failed to read event");
+            throw std::runtime_error("Adapter failed to read event");
         }
     }
     return evt;
