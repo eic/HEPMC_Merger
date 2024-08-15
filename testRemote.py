@@ -3,6 +3,7 @@ import subprocess
 subprocess.run(["./build/SignalBackgroundMerger",
                 "--nSlices", "10",
                 "--intWindow", "2000.0",
+                "--bunchSpacing", "10.0",
                 "--signalFile", "root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run5.ab.hepmc3.tree.root", 
                 "--signalFreq", "0",
                 "--bg1File", "root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/proton/pythia8.306-1.0/100GeV/pythia8.306-1.0_ProtonBeamGas_100GeV_run091.hepmc3.tree.root",
