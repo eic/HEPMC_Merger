@@ -20,8 +20,8 @@ public:
     inline bool        getIsBunchCorrelated() const { return bunchCorrelated; }
 
     void SetupWeights();
-    std::vector<double> GenerateSampleTimes(double intWindow, double bunchSpacing, std::mt19937 rng);
-    HepMC3::GenEvent getNextEvent(std::mt19937 rng);
+    std::vector<double> GenerateSampleTimes(double intWindow, double bunchSpacing, std::mt19937& rng);
+    HepMC3::GenEvent getNextEvent(std::mt19937& rng);
 
 private:
     std::shared_ptr<HepMC3::Reader> adapter;
