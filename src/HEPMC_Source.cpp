@@ -1,4 +1,3 @@
-
 #include "HEPMC_Source.h"
 #include <HepMC3/ReaderFactory.h>
 
