@@ -80,10 +80,11 @@ public:
     } else {
       outputFileName = nameGen();
     }
+    std::cout << "\n==================================================================\n";
     cout << "Writing to " << outputFileName << endl;
 
     PrepData ( signalFile, signalFreq, signalSkip, true );
-    PrepData ( bg1File, bg1Freq, bg1Skip );
+    PrepData ( bg1File, bg1Freq, bg1Skip);
     PrepData ( bg2File, bg2Freq, bg2Skip);
     PrepData ( bg3File, bg3Freq, bg3Skip);
     PrepData ( bg4File, bg4Freq, bg4Skip);
@@ -107,7 +108,7 @@ public:
     // Slice loop
     int i = 0;
     for (i = 0; i<nSlices; ++i ) {
-      if (i % 100 == 0 || verbose ) squawk(i);
+      if (i % 1000 == 0 || verbose ) squawk(i);
       auto hepSlice = mergeSlice(i);
       if (!hepSlice) {
 	std::cout << "Exhausted signal source." << std::endl;
@@ -127,9 +128,9 @@ public:
     for (auto info : infoDict) {
       std::cout << "From " << info.first << std::endl;
       std::cout << "  placed " << info.second.eventCount << " events" << std::endl; 
-      std::cout << "  --> on average " << info.second.eventCount / nSlices << std::endl;
+      std::cout << "  --> on average " << std::setprecision(3) << info.second.eventCount / float(nSlices) << std::endl;
       std::cout << "  placed " << info.second.particleCount << " final state particles" << std::endl;
-      std::cout << "  --> on average " << info.second.particleCount / nSlices << std::endl;
+      std::cout << "  --> on average " << std::setprecision(3) << info.second.particleCount / float(nSlices) << std::endl;
       
     }
 
@@ -222,13 +223,13 @@ public:
       .help("Number of third background events to skip. Default is 0");
 
     args.add_argument("-bg4", "--bg4File")
-      .default_value(std::string(""))
+      .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run2.ab.hepmc3.tree.root"))
       .help("Name of the fourth HEPMC file with background events");
     
     args.add_argument("-bf4", "--bg4Freq")
-      .default_value(0.0)
+      .default_value(184.0)
       .scan<'g', double>()
-      .help("Fourth background frequency in kHz. Default is 0 to use the weights in the corresponding input file. Set to a value >0 to specify a frequency instead.");
+      .help("Fourth background frequency in kHz. Default is the estimated DIS rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
     
     args.add_argument("-bg4S", "--bg4Skip")
       .default_value(0)
