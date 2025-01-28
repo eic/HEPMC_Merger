@@ -35,13 +35,14 @@ using std::string;
 
 // =============================================================
 /**
-    Combine signal and up to three background HEPMC files.
+    Combine signal and up to four background HEPMC files.
     
     Typical usage:
     ./SignalBackgroundMerger --signalFile dis.hepmc --signalFreq 0 \
             --bg1File hgas.hepmc --bg1Freq 31.9 \
             --bg2File egas.hepmc --bg2Freq 3177.25 \
-            --bg3File sr.hepmc
+            --bg3File sr.hepmc \
+            --bg4File bg4.hepmc --bg4Freq 1000.0
 **/    
 class SignalBackgroundMerger {
 
@@ -79,12 +80,14 @@ public:
     } else {
       outputFileName = nameGen();
     }
+    std::cout << "\n==================================================================\n";
     cout << "Writing to " << outputFileName << endl;
 
     PrepData ( signalFile, signalFreq, signalSkip, true );
-    PrepData ( bg1File, bg1Freq, bg1Skip );
+    PrepData ( bg1File, bg1Freq, bg1Skip);
     PrepData ( bg2File, bg2Freq, bg2Skip);
     PrepData ( bg3File, bg3Freq, bg3Skip);
+    PrepData ( bg4File, bg4Freq, bg4Skip);
     
     auto t1 = std::chrono::high_resolution_clock::now();
     std::cout << "Initiation time: " << std::round(std::chrono::duration<double, std::chrono::seconds::period>(t1 - t0).count()) << " sec" << std::endl;
@@ -105,7 +108,7 @@ public:
     // Slice loop
     int i = 0;
     for (i = 0; i<nSlices; ++i ) {
-      if (i % 100 == 0 || verbose ) squawk(i);
+      if (i % 1000 == 0 || verbose ) squawk(i);
       auto hepSlice = mergeSlice(i);
       if (!hepSlice) {
 	std::cout << "Exhausted signal source." << std::endl;
@@ -125,9 +128,9 @@ public:
     for (auto info : infoDict) {
       std::cout << "From " << info.first << std::endl;
       std::cout << "  placed " << info.second.eventCount << " events" << std::endl; 
-      std::cout << "  --> on average " << info.second.eventCount / nSlices << std::endl;
+      std::cout << "  --> on average " << std::setprecision(3) << info.second.eventCount / float(nSlices) << std::endl;
       std::cout << "  placed " << info.second.particleCount << " final state particles" << std::endl;
-      std::cout << "  --> on average " << info.second.particleCount / nSlices << std::endl;
+      std::cout << "  --> on average " << std::setprecision(3) << info.second.particleCount / float(nSlices) << std::endl;
       
     }
 
@@ -161,7 +164,7 @@ public:
     // ArgumentParser internally uses std::string_views,
     // references, iterators, etc.
     // Many of these elements become invalidated after a copy or move.
-    argparse::ArgumentParser args ("Merge signal events with up to three background sources.");
+    argparse::ArgumentParser args ("Merge signal events with up to four background sources.");
     
     args.add_argument("-i", "--signalFile")
       .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run1.ab.hepmc3.tree.root"))
@@ -218,6 +221,20 @@ public:
       .default_value(0)
       .scan<'i', int>()
       .help("Number of third background events to skip. Default is 0");
+
+    args.add_argument("-bg4", "--bg4File")
+      .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run2.ab.hepmc3.tree.root"))
+      .help("Name of the fourth HEPMC file with background events");
+    
+    args.add_argument("-bf4", "--bg4Freq")
+      .default_value(184.0)
+      .scan<'g', double>()
+      .help("Fourth background frequency in kHz. Default is the estimated DIS rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
+    
+    args.add_argument("-bg4S", "--bg4Skip")
+      .default_value(0)
+      .scan<'i', int>()
+      .help("Number of fourth background events to skip. Default is 0");
     
     args.add_argument("-o", "--outputFile")
       .default_value(std::string("bgmerged.hepmc3.tree.root"))
@@ -277,6 +294,10 @@ public:
     bg3File = args.get<std::string>("--bg3File");
     bg3Freq = args.get<double>("--bg3Freq");
     bg3Skip = args.get<int>("--bg3Skip");
+
+    bg4File = args.get<std::string>("--bg4File");
+    bg4Freq = args.get<double>("--bg4Freq");
+    bg4Skip = args.get<int>("--bg4Skip");
     
     outputFile = args.get<std::string>("--outputFile");
     rootFormat = args.get<bool>("--rootFormat");
@@ -316,6 +337,10 @@ public:
     if (!bg3File.empty()) {
       freqTerm = bg3Freq > 0 ? std::to_string(bg3Freq) + " kHz" : "(from weights)";
       std::cout << "\t- " << bg3File << "\t" << freqTerm << "\n";
+    }
+    if (!bg4File.empty()) {
+      freqTerm = bg4Freq > 0 ? std::to_string(bg4Freq) + " kHz" : "(from weights)";
+      std::cout << "\t- " << bg4File << "\t" << freqTerm << "\n";
     }	
   }
   
@@ -648,9 +673,9 @@ public:
   
   // private:
   std::mt19937 rng;
-  string signalFile, bg1File, bg2File, bg3File;
-  double signalFreq, bg1Freq, bg2Freq, bg3Freq;
-  int signalSkip, bg1Skip, bg2Skip, bg3Skip;
+  string signalFile, bg1File, bg2File, bg3File, bg4File;
+  double signalFreq, bg1Freq, bg2Freq, bg3Freq, bg4Freq;
+  int signalSkip, bg1Skip, bg2Skip, bg3Skip, bg4Skip;
   string outputFile;
   string outputFileName;
   bool rootFormat;
