@@ -2,17 +2,17 @@ Used: https://github.com/eic/HEPMC_Merger/releases/tag/v1.0.2
 
 Input:
 ```
-xrdcp root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run1.ab.hepmc3.tree.root .
+xrdcp root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run1.ab.hepmc3.tree.root .
 ```
 
 Electron gas:
 ```
-xrdcp root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/electron/GETaLM1.0.0-1.0/10GeV/GETaLM1.0.0-1.0_ElectronBeamGas_10GeV_foam_emin10keV_run001.hepmc3.tree.root .
+xrdcp root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/electron/GETaLM1.0.0-1.0/10GeV/GETaLM1.0.0-1.0_ElectronBeamGas_10GeV_foam_emin10keV_run001.hepmc3.tree.root .
 ```
 
 Proton gas:
 ```
-for f in `xrdfs root://dtn-eic.jlab.org ls /work/eic2/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/proton/pythia8.306-1.0/100GeV | grep 'pythia8.306-1.0_ProtonBeamGas_100GeV_run00.*.hepmc3.tree.root'`
+for f in `xrdfs root://dtn-eic.jlab.org ls /volatile/eic/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/proton/pythia8.306-1.0/100GeV | grep 'pythia8.306-1.0_ProtonBeamGas_100GeV_run00.*.hepmc3.tree.root'`
 do
 xrdcp root://dtn-eic.jlab.org/$f .
 done

@@ -167,7 +167,7 @@ public:
     argparse::ArgumentParser args ("Merge signal events with up to four background sources.");
     
     args.add_argument("-i", "--signalFile")
-      .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run1.ab.hepmc3.tree.root"))
+      .default_value(std::string("root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run1.ab.hepmc3.tree.root"))
       .help("Name of the HEPMC file with the signal events");
     
     args.add_argument("-sf", "--signalFreq")
@@ -181,7 +181,7 @@ public:
     .help("Number of signals events to skip. Default is 0.");
 
     args.add_argument("-bg1", "--bg1File")
-      .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/proton/pythia8.306-1.0/100GeV/pythia8.306-1.0_ProtonBeamGas_100GeV_run082.hepmc3.tree.root"))
+      .default_value(std::string("root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/proton/pythia8.306-1.0/100GeV/pythia8.306-1.0_ProtonBeamGas_100GeV_run082.hepmc3.tree.root"))
       .help("Name of the first HEPMC file with background events");
     
     args.add_argument("-bf1", "--bg1Freq")
@@ -195,7 +195,7 @@ public:
     .help("Number of first background events to skip. Default is 0.");
 
     args.add_argument("-bg2", "--bg2File")
-      .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/electron/beam_gas_ep_10GeV_foam_emin10keV_30Mevt.hepmc3.tree.root"))
+      .default_value(std::string("root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/electron/beam_gas_ep_10GeV_foam_emin10keV_30Mevt.hepmc3.tree.root"))
       .help("Name of the second HEPMC file with background events");
     
     args.add_argument("-bf2", "--bg2Freq")
@@ -223,7 +223,7 @@ public:
       .help("Number of third background events to skip. Default is 0");
 
     args.add_argument("-bg4", "--bg4File")
-      .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run2.ab.hepmc3.tree.root"))
+      .default_value(std::string("root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run2.ab.hepmc3.tree.root"))
       .help("Name of the fourth HEPMC file with background events");
     
     args.add_argument("-bf4", "--bg4Freq")
