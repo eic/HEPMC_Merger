@@ -237,13 +237,13 @@ public:
       .help("Number of fourth background events to skip. Default is 0");
     
     args.add_argument("-o", "--outputFile")
-      .default_value(std::string("bgmerged.hepmc3.tree.root"))
-      .help("Specify the output file name. By default bgmerged.hepmc3.tree.root is used");
+      .default_value(std::string("bgmerged"))
+      .help("Specify the output file name. By default bgmerged is used");
 
-    args.add_argument("-r", "--rootFormat")
-      .default_value(true)
+    args.add_argument("-hepmc", "--hepmcFormat")
+      .default_value(false)
       .implicit_value(true)
-      .help("Use hepmc.root output format, default is true.");
+      .help("Use .hepmc instead of hempmc.root as output format, default is false.");
 	
     args.add_argument("-w", "--intWindow")
       .default_value(2000.0)
@@ -300,7 +300,11 @@ public:
     bg4Skip = args.get<int>("--bg4Skip");
     
     outputFile = args.get<std::string>("--outputFile");
-    rootFormat = args.get<bool>("--rootFormat");
+    rootFormat = !args.get<bool>("--hepmcFormat");
+    if (rootFormat)
+      outputFile+=".hepmc3.tree.root";
+    else
+      outputFile+=".hepmc3";
     intWindow  = args.get<double>("--intWindow");
     nSlices    = args.get<int>("--nSlices");
     squashTime = args.get<bool>("--squashTime");
@@ -438,10 +442,12 @@ public:
 	  name.replace(pos, 6, "_n_" + std::to_string(nSlices) + ".hepmc");
         }
     }
+
     if ( rootFormat && !hasEnding(name,".root")){
       name.append(".root");
     }
     name = "bgmerged_" + name;
+
     return name;
   }
 
@@ -542,7 +548,7 @@ public:
       adapter->read_event(inevt);
 
       if (squashTime) time = 0;
-      particleCount += insertHepmcEvent( inevt, hepSlice, time);
+      particleCount += insertHepmcEvent( inevt, hepSlice, time, signal);
     }
 
     infoDict[fileName].eventCount += timeline.size();
@@ -590,7 +596,7 @@ public:
     if (!squashTime) {
       for ( auto& e : toPlace ){
 	      double time = squashTime ? 0 : uni(rng);
-        particleCount += insertHepmcEvent( e, hepSlice, time);
+        particleCount += insertHepmcEvent( e, hepSlice, time, signal);
       }
     }
 
@@ -602,7 +608,7 @@ public:
 
   // ---------------------------------------------------------------------------
   long insertHepmcEvent( const HepMC3::GenEvent& inevt,
-			 std::unique_ptr<HepMC3::GenEvent>& hepSlice, double time=0) {
+			 std::unique_ptr<HepMC3::GenEvent>& hepSlice, double time=0, bool signal = false) {
     // Unit conversion
     double timeHepmc = c_light * time;
     
@@ -625,6 +631,8 @@ public:
       int status = particle->status();
       if (status == 1 ) finalParticleCount++;
       int pid = particle->pid();
+      // if (!signal) // for background events, change the status to 2xx to allow easy efficiency study in simulation.
+      // status+=200; // fix me: dd4hep will not create intermediate particles.
       auto p1 = std::make_shared<HepMC3::GenParticle> (momentum, pid, status);
       p1->set_generated_mass(particle->generated_mass());
       particles.push_back(p1);
