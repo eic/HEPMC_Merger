@@ -84,10 +84,10 @@ public:
     cout << "Writing to " << outputFileName << endl;
 
     PrepData ( signalFile, signalFreq, signalSkip, true );
-    PrepData ( bg1File, bg1Freq, bg1Skip);
-    PrepData ( bg2File, bg2Freq, bg2Skip);
-    PrepData ( bg3File, bg3Freq, bg3Skip);
-    PrepData ( bg4File, bg4Freq, bg4Skip);
+    PrepData ( bg1File, bg1Freq, bg1Skip, false, use_custom_id);
+    PrepData ( bg2File, bg2Freq, bg2Skip, false, use_custom_id);
+    PrepData ( bg3File, bg3Freq, bg3Skip, false, use_custom_id);
+    PrepData ( bg4File, bg4Freq, bg4Skip, false, use_custom_id);
     
     auto t1 = std::chrono::high_resolution_clock::now();
     std::cout << "Initiation time: " << std::round(std::chrono::duration<double, std::chrono::seconds::period>(t1 - t0).count()) << " sec" << std::endl;
@@ -265,6 +265,11 @@ public:
       .action([](const std::string& value) { return std::stoi(value); })
       .help("Random seed, default is None");
     
+    args.add_argument("--use_custom_bg_generator_id")
+      .default_value(false)
+      .implicit_value(true)
+      .help("Set the primary particle generator ID to 201, 202, instead of 1, 2 for background events. Such a merged sample would require DD4hep 1.32+ to run.");
+
     args.add_argument("-v", "--verbose")
       .default_value(false)
       .implicit_value(true)
@@ -310,7 +315,8 @@ public:
     squashTime = args.get<bool>("--squashTime");
     rngSeed    = args.get<int>("--rngSeed");
     verbose    = args.get<bool>("--verbose");
-          
+    use_custom_id   = args.get<bool>("--use_custom_bg_generator_id");
+
   }
   
   // ---------------------------------------------------------------------------
@@ -346,10 +352,12 @@ public:
       freqTerm = bg4Freq > 0 ? std::to_string(bg4Freq) + " kHz" : "(from weights)";
       std::cout << "\t- " << bg4File << "\t" << freqTerm << "\n";
     }	
+    if (use_custom_id)
+      cout<<"\n!!!!WARNING!!!! \n use_custom_bg_generator_id will set the outgoing particles from background to generator ID 201 and 202.\n Please make sure you run ddsim (v1.32+) with \n        --physics.alternativeStableStatuses=201 --physics.alternativeDecayStatuses=202\n";          
   }
   
   // ---------------------------------------------------------------------------  
-  void PrepData(const std::string& fileName, double freq, int skip=0, bool signal=false) {
+  void PrepData(const std::string& fileName, double freq, int skip=0, bool signal=false, bool use_custom_id=false) {
     if (fileName.empty()) return;
 
     cout << "Prepping " << fileName << endl;
@@ -491,7 +499,7 @@ public:
     
     for (const auto& freqBgs : freqAdapters) {
       auto fileName=freqBgs.first;
-      addFreqEvents(fileName, freqAdapters[fileName], freqs[fileName], hepSlice);
+      addFreqEvents(fileName, freqAdapters[fileName], freqs[fileName], hepSlice, false, use_custom_id);
     }
     
     for (const auto& fileName : weightDict) {
@@ -504,7 +512,7 @@ public:
   // ---------------------------------------------------------------------------
 
   void addFreqEvents(std::string fileName, std::shared_ptr<HepMC3::Reader>& adapter, const double freq,
-		     std::unique_ptr<HepMC3::GenEvent>& hepSlice, bool signal = false) {
+		     std::unique_ptr<HepMC3::GenEvent>& hepSlice, bool signal = false, bool use_custom_id = false) {
 
     // First, create a timeline
     // Signals can be different
@@ -548,7 +556,7 @@ public:
       adapter->read_event(inevt);
 
       if (squashTime) time = 0;
-      particleCount += insertHepmcEvent( inevt, hepSlice, time, signal);
+      particleCount += insertHepmcEvent( inevt, hepSlice, time, signal, use_custom_id);
     }
 
     infoDict[fileName].eventCount += timeline.size();
@@ -608,7 +616,7 @@ public:
 
   // ---------------------------------------------------------------------------
   long insertHepmcEvent( const HepMC3::GenEvent& inevt,
-			 std::unique_ptr<HepMC3::GenEvent>& hepSlice, double time=0, bool signal = false) {
+			 std::unique_ptr<HepMC3::GenEvent>& hepSlice, double time=0, bool signal = false, bool use_custom_id = false) {
     // Unit conversion
     double timeHepmc = c_light * time;
     
@@ -631,8 +639,10 @@ public:
       int status = particle->status();
       if (status == 1 ) finalParticleCount++;
       int pid = particle->pid();
-      // if (!signal) // for background events, change the status to 2xx to allow easy efficiency study in simulation.
-      // status+=200; // fix me: dd4hep will not create intermediate particles.
+      if (!signal){ // for background events, change the status to 2xx to allow easy efficiency study in simulation.
+        if (((status == 1) || (status == 2)) && use_custom_id) 
+          status += 200;
+      }
       auto p1 = std::make_shared<HepMC3::GenParticle> (momentum, pid, status);
       p1->set_generated_mass(particle->generated_mass());
       particles.push_back(p1);
@@ -691,6 +701,7 @@ public:
   int nSlices; // should be long, but argparse cannot read that
   bool squashTime;
   int rngSeed;  // should be unsigned, but argparse cannot read that
+  bool use_custom_id;
   bool verbose;
   
   const double c_light = 299.792458; // speed of light = 299.792458 mm/ns to get mm  
