@@ -237,18 +237,13 @@ public:
       .help("Number of fourth background events to skip. Default is 0");
     
     args.add_argument("-o", "--outputFile")
-      .default_value(std::string("bgmerged"))
-      .help("Specify the output file name. By default bgmerged is used");
+      .default_value(std::string("bgmerged.hepmc3.tree.root"))
+      .help("Specify the output file name. By default bgmerged.hepmc3.tree.root is used");
 
     args.add_argument("-r", "--rootFormat")
       .default_value(true)
       .implicit_value(true)
       .help("Use hepmc.root output format, default is true.");
-
-    args.add_argument("-hepmc", "--hepmcFormat")
-      .default_value(false)
-      .implicit_value(true)
-      .help("Overwrite the --rootFormat flag to use .hepmc3 as output format, default is false.");
 	
     args.add_argument("-w", "--intWindow")
       .default_value(2000.0)
@@ -310,15 +305,7 @@ public:
     bg4Skip = args.get<int>("--bg4Skip");
     
     outputFile = args.get<std::string>("--outputFile");
-    rootFormat = !args.get<bool>("--hepmcFormat");
-    if (rootFormat){
-      if (!hasEnding(outputFile,".root"))
-        outputFile+=".hepmc3.tree.root";
-    }
-    else{
-      if (!hasEnding(outputFile,".hepmc3") || !hasEnding(outputFile,".hepmc"))
-      outputFile+=".hepmc3"; 
-    }
+    rootFormat = args.get<bool>("--rootFormat");
     intWindow  = args.get<double>("--intWindow");
     nSlices    = args.get<int>("--nSlices");
     squashTime = args.get<bool>("--squashTime");
