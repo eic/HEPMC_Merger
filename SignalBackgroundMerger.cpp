@@ -450,7 +450,7 @@ public:
     adapter->skip(skip);
     freqAdapters[fileName] = adapter;
     freqs[fileName] = freq;
-    baseStatuses[filename] = baseStatus;
+    baseStatuses[fileName] = baseStatus;
   }
 
    // ---------------------------------------------------------------------------
@@ -522,7 +522,7 @@ public:
     
     for (const auto& freqBgs : freqAdapters) {
       auto fileName=freqBgs.first;
-      addFreqEvents(fileName, freqAdapters[fileName], freqs[fileName], hepSlice, baseStatuses[filename], false);
+      addFreqEvents(fileName, freqAdapters[fileName], freqs[fileName], hepSlice, baseStatuses[fileName], false);
     }
     
     for (const auto& fileName : weightDict) {
