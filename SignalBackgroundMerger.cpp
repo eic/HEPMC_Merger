@@ -50,8 +50,10 @@ private:
   // more private data at the end; pulling these more complicated objects up for readability
   std::shared_ptr<HepMC3::Reader> sigAdapter;
   double sigFreq = 0;
+  int sigStatus = 0;
   std::map<std::string, std::shared_ptr<HepMC3::Reader>> freqAdapters;
   std::map<std::string, double> freqs;
+  std::map<std::string, int> baseStatuses;
 
   std::map<std::string,
 	  std::tuple<std::vector<HepMC3::GenEvent>,
@@ -83,11 +85,11 @@ public:
     std::cout << "\n==================================================================\n";
     cout << "Writing to " << outputFileName << endl;
 
-    PrepData ( signalFile, signalFreq, signalSkip, true );
-    PrepData ( bg1File, bg1Freq, bg1Skip, false, use_custom_id);
-    PrepData ( bg2File, bg2Freq, bg2Skip, false, use_custom_id);
-    PrepData ( bg3File, bg3Freq, bg3Skip, false, use_custom_id);
-    PrepData ( bg4File, bg4Freq, bg4Skip, false, use_custom_id);
+    PrepData ( signalFile, signalFreq, signalSkip, signalStatus, true );
+    PrepData ( bg1File, bg1Freq, bg1Skip, bg1Status, false);
+    PrepData ( bg2File, bg2Freq, bg2Skip, bg2Status, false);
+    PrepData ( bg3File, bg3Freq, bg3Skip, bg3Status, false);
+    PrepData ( bg4File, bg4Freq, bg4Skip, bg4Status, false);
     
     auto t1 = std::chrono::high_resolution_clock::now();
     std::cout << "Initiation time: " << std::round(std::chrono::duration<double, std::chrono::seconds::period>(t1 - t0).count()) << " sec" << std::endl;
@@ -180,6 +182,11 @@ public:
     .scan<'i', int>()
     .help("Number of signals events to skip. Default is 0.");
 
+    args.add_argument("-St", "--signalStatus")
+      .default_value(0)
+    .scan<'i', int>()
+    .help("Base status code for signal. Default is 0.");
+
     args.add_argument("-bg1", "--bg1File")
       .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/proton/pythia8.306-1.0/100GeV/pythia8.306-1.0_ProtonBeamGas_100GeV_run082.hepmc3.tree.root"))
       .help("Name of the first HEPMC file with background events");
@@ -194,6 +201,11 @@ public:
     .scan<'i', int>()
     .help("Number of first background events to skip. Default is 0.");
 
+    args.add_argument("-bg1St", "--bg1Status")
+      .default_value(2000)
+      .scan<'i', int>()
+      .help("Base status code for first background source. Default is 2000");
+
     args.add_argument("-bg2", "--bg2File")
       .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/electron/beam_gas_ep_10GeV_foam_emin10keV_30Mevt.hepmc3.tree.root"))
       .help("Name of the second HEPMC file with background events");
@@ -206,7 +218,12 @@ public:
     args.add_argument("-bg2S", "--bg2Skip")
       .default_value(0)
       .scan<'i', int>()
-      .help("Number of second background events to skip. Default is 0.");\
+      .help("Number of second background events to skip. Default is 0.");
+
+    args.add_argument("-bg2St", "--bg2Status")
+      .default_value(4000)
+      .scan<'i', int>()
+      .help("Base status code for second background source. Default is 4000");
 
     args.add_argument("-bg3", "--bg3File")
       .default_value(std::string(""))
@@ -221,6 +238,11 @@ public:
       .default_value(0)
       .scan<'i', int>()
       .help("Number of third background events to skip. Default is 0");
+    
+    args.add_argument("-bg3St", "--bg3Status")
+      .default_value(6000)
+      .scan<'i', int>()
+      .help("Base status code for third background source. Default is 6000");
 
     args.add_argument("-bg4", "--bg4File")
       .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run2.ab.hepmc3.tree.root"))
@@ -235,6 +257,11 @@ public:
       .default_value(0)
       .scan<'i', int>()
       .help("Number of fourth background events to skip. Default is 0");
+
+    args.add_argument("-bg4St", "--bg4Status")
+      .default_value(8000)
+      .scan<'i', int>()
+      .help("Base status code for fourth background source. Default is 8000");
     
     args.add_argument("-o", "--outputFile")
       .default_value(std::string("bgmerged.hepmc3.tree.root"))
@@ -265,11 +292,6 @@ public:
       .action([](const std::string& value) { return std::stoi(value); })
       .help("Random seed, default is None");
     
-    args.add_argument("--use_custom_bg_generator_id")
-      .default_value(false)
-      .implicit_value(true)
-      .help("Set the primary particle generator ID to 201, 202, instead of 1, 2 for background events. Such a merged sample would require DD4hep 1.32+ to run.");
-
     args.add_argument("-v", "--verbose")
       .default_value(false)
       .implicit_value(true)
@@ -287,22 +309,27 @@ public:
     signalFile = args.get<std::string>("--signalFile");
     signalFreq = args.get<double>("--signalFreq");
     signalSkip = args.get<int>("--signalSkip");
+    signalStatus = args.get<int>("--signalStatus");
 
     bg1File = args.get<std::string>("--bg1File");
     bg1Freq = args.get<double>("--bg1Freq");
     bg1Skip = args.get<int>("--bg1Skip");
+    bg1Status = args.get<int>("--bg1Status");
 
     bg2File = args.get<std::string>("--bg2File");
     bg2Freq = args.get<double>("--bg2Freq");
     bg2Skip = args.get<int>("--bg2Skip");
+    bg2Status = args.get<int>("--bg2Status");
 
     bg3File = args.get<std::string>("--bg3File");
     bg3Freq = args.get<double>("--bg3Freq");
     bg3Skip = args.get<int>("--bg3Skip");
+    bg3Status = args.get<int>("--bg3Status");
 
     bg4File = args.get<std::string>("--bg4File");
     bg4Freq = args.get<double>("--bg4Freq");
     bg4Skip = args.get<int>("--bg4Skip");
+    bg4Status = args.get<int>("--bg4Status");
     
     outputFile = args.get<std::string>("--outputFile");
     rootFormat = args.get<bool>("--rootFormat");
@@ -311,7 +338,6 @@ public:
     squashTime = args.get<bool>("--squashTime");
     rngSeed    = args.get<int>("--rngSeed");
     verbose    = args.get<bool>("--verbose");
-    use_custom_id   = args.get<bool>("--use_custom_bg_generator_id");
 
   }
   
@@ -348,12 +374,11 @@ public:
       freqTerm = bg4Freq > 0 ? std::to_string(bg4Freq) + " kHz" : "(from weights)";
       std::cout << "\t- " << bg4File << "\t" << freqTerm << "\n";
     }	
-    if (use_custom_id)
-      cout<<"\n!!!!WARNING!!!! \n use_custom_bg_generator_id will set the outgoing particles from background to generator ID 201 and 202.\n Please make sure you run ddsim (v1.32+) with \n        --physics.alternativeStableStatuses=201 --physics.alternativeDecayStatuses=202\n";          
+             
   }
   
   // ---------------------------------------------------------------------------  
-  void PrepData(const std::string& fileName, double freq, int skip=0, bool signal=false, bool use_custom_id=false) {
+  void PrepData(const std::string& fileName, double freq, int skip=0, int baseStatus=0, bool signal=false) {
     if (fileName.empty()) return;
 
     cout << "Prepping " << fileName << endl;
@@ -373,6 +398,7 @@ public:
     if (signal) {
       sigAdapter = adapter;
       sigFreq = freq;
+      sigStatus = baseStatus;
       sigAdapter->skip(skip);
       return;
     }
@@ -424,6 +450,7 @@ public:
     adapter->skip(skip);
     freqAdapters[fileName] = adapter;
     freqs[fileName] = freq;
+    baseStatuses[filename] = baseStatus;
   }
 
    // ---------------------------------------------------------------------------
@@ -491,15 +518,15 @@ public:
   std::unique_ptr<HepMC3::GenEvent> mergeSlice(int i) {
     auto hepSlice = std::make_unique<HepMC3::GenEvent>(HepMC3::Units::GEV, HepMC3::Units::MM);
     
-    addFreqEvents(signalFile, sigAdapter, sigFreq, hepSlice, true);
+    addFreqEvents(signalFile, sigAdapter, sigFreq, hepSlice, signalStatus, true);
     
     for (const auto& freqBgs : freqAdapters) {
       auto fileName=freqBgs.first;
-      addFreqEvents(fileName, freqAdapters[fileName], freqs[fileName], hepSlice, false, use_custom_id);
+      addFreqEvents(fileName, freqAdapters[fileName], freqs[fileName], hepSlice, baseStatuses[filename], false);
     }
     
     for (const auto& fileName : weightDict) {
-      addWeightedEvents(fileName.first, hepSlice);
+      addWeightedEvents(fileName.first, hepSlice, baseStatuses[fileName.first]);
     }
 
     return hepSlice;
@@ -508,7 +535,7 @@ public:
   // ---------------------------------------------------------------------------
 
   void addFreqEvents(std::string fileName, std::shared_ptr<HepMC3::Reader>& adapter, const double freq,
-		     std::unique_ptr<HepMC3::GenEvent>& hepSlice, bool signal = false, bool use_custom_id = false) {
+		     std::unique_ptr<HepMC3::GenEvent>& hepSlice, int baseStatus = 0, bool signal = false) {
 
     // First, create a timeline
     // Signals can be different
@@ -552,7 +579,7 @@ public:
       adapter->read_event(inevt);
 
       if (squashTime) time = 0;
-      particleCount += insertHepmcEvent( inevt, hepSlice, time, signal, use_custom_id);
+      particleCount += insertHepmcEvent( inevt, hepSlice, time, baseStatus, signal);
     }
 
     infoDict[fileName].eventCount += timeline.size();
@@ -564,7 +591,7 @@ public:
 
   // ---------------------------------------------------------------------------
 
-  void addWeightedEvents(std::string fileName, std::unique_ptr<HepMC3::GenEvent>& hepSlice, bool signal = false) {
+  void addWeightedEvents(std::string fileName, std::unique_ptr<HepMC3::GenEvent>& hepSlice, int baseStatus=0, bool signal = false) {
     auto& [events, weightedDist, avgRate ] = weightDict[fileName];
 
     // How many events? Assume Poisson distribution
@@ -600,7 +627,7 @@ public:
     if (!squashTime) {
       for ( auto& e : toPlace ){
 	      double time = squashTime ? 0 : uni(rng);
-        particleCount += insertHepmcEvent( e, hepSlice, time, signal);
+        particleCount += insertHepmcEvent( e, hepSlice, time, baseStatus, signal);
       }
     }
 
@@ -612,7 +639,7 @@ public:
 
   // ---------------------------------------------------------------------------
   long insertHepmcEvent( const HepMC3::GenEvent& inevt,
-			 std::unique_ptr<HepMC3::GenEvent>& hepSlice, double time=0, bool signal = false, bool use_custom_id = false) {
+			 std::unique_ptr<HepMC3::GenEvent>& hepSlice, double time=0, int baseStatus=0, bool signal = false) {
     // Unit conversion
     double timeHepmc = c_light * time;
     
@@ -635,9 +662,8 @@ public:
       int status = particle->status();
       if (status == 1 ) finalParticleCount++;
       int pid = particle->pid();
-      if (!signal){ // for background events, change the status to 2xx to allow easy efficiency study in simulation.
-        if (((status == 1) || (status == 2)) && use_custom_id) 
-          status += 200;
+      if ((status == 1) || (status == 2)){
+          status += baseStatus;
       }
       auto p1 = std::make_shared<HepMC3::GenParticle> (momentum, pid, status);
       p1->set_generated_mass(particle->generated_mass());
@@ -690,6 +716,7 @@ public:
   string signalFile, bg1File, bg2File, bg3File, bg4File;
   double signalFreq, bg1Freq, bg2Freq, bg3Freq, bg4Freq;
   int signalSkip, bg1Skip, bg2Skip, bg3Skip, bg4Skip;
+  int signalStatus, bg1Status, bg2Status, bg3Status, bg4Status;
   string outputFile;
   string outputFileName;
   bool rootFormat;
@@ -697,7 +724,6 @@ public:
   int nSlices; // should be long, but argparse cannot read that
   bool squashTime;
   int rngSeed;  // should be unsigned, but argparse cannot read that
-  bool use_custom_id;
   bool verbose;
   
   const double c_light = 299.792458; // speed of light = 299.792458 mm/ns to get mm  
