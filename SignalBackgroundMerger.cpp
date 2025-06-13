@@ -662,9 +662,7 @@ public:
       int status = particle->status();
       if (status == 1 ) finalParticleCount++;
       int pid = particle->pid();
-      if ((status == 1) || (status == 2)){
-          status += baseStatus;
-      }
+      status += baseStatus;
       auto p1 = std::make_shared<HepMC3::GenParticle> (momentum, pid, status);
       p1->set_generated_mass(particle->generated_mass());
       particles.push_back(p1);
