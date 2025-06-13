@@ -354,25 +354,30 @@ public:
 
     std::cout << "Number of Slices:" << nSlices << endl;
     std::string freqTerm = signalFreq > 0 ? std::to_string(signalFreq) + " kHz" : "(one event per time slice)";
+    std::string statusTerm = signalStatus > 0 ? "Shifting all particle status codes from this source by" + std::to_string(signalStatus) : "";
     std::cout << "Signal events file and frequency:\n";
-    std::cout << "\t- " << signalFile << "\t" << freqTerm << "\n";
+    std::cout << "\t- " << signalFile << "\t" << freqTerm << "\n" << statusTerm << "\n";
     
     std::cout << "\nBackground files and their respective frequencies:\n";
     if (!bg1File.empty()) {
       freqTerm = bg1Freq > 0 ? std::to_string(bg1Freq) + " kHz" : "(from weights)";
-      std::cout << "\t- " << bg1File << "\t" << freqTerm << "\n";
+      statusTerm = bg1Status > 0 ? "Shifting all particle status codes from this source by" + std::to_string(bg1Status) : "";
+      std::cout << "\t- " << bg1File << "\t" << freqTerm << "\n" << statusTerm << "\n";
     }
     if (!bg2File.empty()) {
       freqTerm = bg2Freq > 0 ? std::to_string(bg2Freq) + " kHz" : "(from weights)";
-      std::cout << "\t- " << bg2File << "\t" << freqTerm << "\n";
+      statusTerm = bg2Status > 0 ? "Shifting all particle status codes from this source by" + std::to_string(bg2Status) : "";
+      std::cout << "\t- " << bg2File << "\t" << freqTerm << "\n" << statusTerm << "\n";
     }
     if (!bg3File.empty()) {
       freqTerm = bg3Freq > 0 ? std::to_string(bg3Freq) + " kHz" : "(from weights)";
-      std::cout << "\t- " << bg3File << "\t" << freqTerm << "\n";
+      statusTerm = bg3Status > 0 ? "Shifting all particle status codes from this source by" + std::to_string(bg3Status) : "";
+      std::cout << "\t- " << bg3File << "\t" << freqTerm << "\n" << statusTerm << "\n";
     }
     if (!bg4File.empty()) {
       freqTerm = bg4Freq > 0 ? std::to_string(bg4Freq) + " kHz" : "(from weights)";
-      std::cout << "\t- " << bg4File << "\t" << freqTerm << "\n";
+      statusTerm = bg4Status > 0 ? "Shifting all particle status codes from this source by" + std::to_string(bg4Status) : "";
+      std::cout << "\t- " << bg4File << "\t" << freqTerm << "\n" << statusTerm << "\n";
     }	
              
   }
