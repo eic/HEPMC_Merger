@@ -202,9 +202,9 @@ public:
     .help("Number of first background events to skip. Default is 0.");
 
     args.add_argument("-bg1St", "--bg1Status")
-      .default_value(2000)
+      .default_value(0)
       .scan<'i', int>()
-      .help("Base status code for first background source. Default is 2000");
+      .help("Base status code for first background source. Default is 0");
 
     args.add_argument("-bg2", "--bg2File")
       .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/electron/beam_gas_ep_10GeV_foam_emin10keV_30Mevt.hepmc3.tree.root"))
@@ -221,9 +221,9 @@ public:
       .help("Number of second background events to skip. Default is 0.");
 
     args.add_argument("-bg2St", "--bg2Status")
-      .default_value(4000)
+      .default_value(0)
       .scan<'i', int>()
-      .help("Base status code for second background source. Default is 4000");
+      .help("Base status code for second background source. Default is 0");
 
     args.add_argument("-bg3", "--bg3File")
       .default_value(std::string(""))
@@ -240,9 +240,9 @@ public:
       .help("Number of third background events to skip. Default is 0");
     
     args.add_argument("-bg3St", "--bg3Status")
-      .default_value(6000)
+      .default_value(0)
       .scan<'i', int>()
-      .help("Base status code for third background source. Default is 6000");
+      .help("Base status code for third background source. Default is 0");
 
     args.add_argument("-bg4", "--bg4File")
       .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run2.ab.hepmc3.tree.root"))
@@ -259,9 +259,9 @@ public:
       .help("Number of fourth background events to skip. Default is 0");
 
     args.add_argument("-bg4St", "--bg4Status")
-      .default_value(8000)
+      .default_value(0)
       .scan<'i', int>()
-      .help("Base status code for fourth background source. Default is 8000");
+      .help("Base status code for fourth background source. Default is 0");
     
     args.add_argument("-o", "--outputFile")
       .default_value(std::string("bgmerged.hepmc3.tree.root"))
