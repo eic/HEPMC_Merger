@@ -17,6 +17,7 @@
 #include <random>
 #include <tuple>
 #include <sys/resource.h>
+#include <fmt/core.h>
 
 #include <HepMC3/ReaderFactory.h>
 #include <HepMC3/WriterAscii.h>
@@ -185,7 +186,7 @@ public:
     args.add_argument("-St", "--signalStatus")
       .default_value(0)
     .scan<'i', int>()
-    .help("Base status code for signal. Default is 0.");
+    .help("Apply shift on particle generatorStatus code for signal. Default is 0. ");
 
     args.add_argument("-bg1", "--bg1File")
       .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/proton/pythia8.306-1.0/100GeV/pythia8.306-1.0_ProtonBeamGas_100GeV_run082.hepmc3.tree.root"))
@@ -204,7 +205,7 @@ public:
     args.add_argument("-bg1St", "--bg1Status")
       .default_value(0)
       .scan<'i', int>()
-      .help("Base status code for first background source. Default is 0");
+      .help("Apply shift on particle generatorStatus code for first background source. Default is 0. Recommand value: 1000 or larger. See appendix A in arxiv: 1912.08005");
 
     args.add_argument("-bg2", "--bg2File")
       .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/electron/beam_gas_ep_10GeV_foam_emin10keV_30Mevt.hepmc3.tree.root"))
@@ -223,7 +224,7 @@ public:
     args.add_argument("-bg2St", "--bg2Status")
       .default_value(0)
       .scan<'i', int>()
-      .help("Base status code for second background source. Default is 0");
+      .help("Apply shift on particle generatorStatus code for second background source. Default is 0");
 
     args.add_argument("-bg3", "--bg3File")
       .default_value(std::string(""))
@@ -242,7 +243,7 @@ public:
     args.add_argument("-bg3St", "--bg3Status")
       .default_value(0)
       .scan<'i', int>()
-      .help("Base status code for third background source. Default is 0");
+      .help("Apply shift on particle generatorStatus code for third background source. Default is 0");
 
     args.add_argument("-bg4", "--bg4File")
       .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run2.ab.hepmc3.tree.root"))
@@ -261,7 +262,7 @@ public:
     args.add_argument("-bg4St", "--bg4Status")
       .default_value(0)
       .scan<'i', int>()
-      .help("Base status code for fourth background source. Default is 0");
+      .help("Apply shift on particle generatorStatus code for fourth background source. Default is 0");
     
     args.add_argument("-o", "--outputFile")
       .default_value(std::string("bgmerged.hepmc3.tree.root"))
@@ -352,34 +353,68 @@ public:
     std::cout << "*** formerly Lawrence Berkeley National Laboratory" << std::endl;
     std::cout << "\nFor more information, run \n./signal_background_merger --help" << std::endl;
 
+    std::string statusMessage = "Shifting all particle status codes from this source by ";
+    std::vector<int> statusList_stable, statusList_decay;
+
     std::cout << "Number of Slices:" << nSlices << endl;
     std::string freqTerm = signalFreq > 0 ? std::to_string(signalFreq) + " kHz" : "(one event per time slice)";
-    std::string statusTerm = signalStatus > 0 ? "Shifting all particle status codes from this source by" + std::to_string(signalStatus) : "";
+    std::string statusTerm = signalStatus > 0 ? statusMessage + std::to_string(signalStatus): "";
+    if (signalStatus>0){
+      statusList_stable.push_back(signalStatus+1);
+      statusList_decay.push_back(signalStatus+2);
+    }
     std::cout << "Signal events file and frequency:\n";
     std::cout << "\t- " << signalFile << "\t" << freqTerm << "\n" << statusTerm << "\n";
     
     std::cout << "\nBackground files and their respective frequencies:\n";
     if (!bg1File.empty()) {
       freqTerm = bg1Freq > 0 ? std::to_string(bg1Freq) + " kHz" : "(from weights)";
-      statusTerm = bg1Status > 0 ? "Shifting all particle status codes from this source by" + std::to_string(bg1Status) : "";
+      statusTerm = bg1Status > 0 ? statusMessage + std::to_string(bg1Status) : "";
       std::cout << "\t- " << bg1File << "\t" << freqTerm << "\n" << statusTerm << "\n";
+      if (bg1Status>0){
+        statusList_stable.push_back(bg1Status+1);
+        statusList_decay.push_back(bg1Status+2);
+      }
     }
     if (!bg2File.empty()) {
       freqTerm = bg2Freq > 0 ? std::to_string(bg2Freq) + " kHz" : "(from weights)";
-      statusTerm = bg2Status > 0 ? "Shifting all particle status codes from this source by" + std::to_string(bg2Status) : "";
+      statusTerm = bg2Status > 0 ? statusMessage + std::to_string(bg2Status) : "";
       std::cout << "\t- " << bg2File << "\t" << freqTerm << "\n" << statusTerm << "\n";
+      if (bg2Status>0){
+        statusList_stable.push_back(bg2Status+1);
+        statusList_decay.push_back(bg2Status+2);
+      }
     }
     if (!bg3File.empty()) {
       freqTerm = bg3Freq > 0 ? std::to_string(bg3Freq) + " kHz" : "(from weights)";
-      statusTerm = bg3Status > 0 ? "Shifting all particle status codes from this source by" + std::to_string(bg3Status) : "";
+      statusTerm = bg3Status > 0 ? statusMessage + std::to_string(bg3Status) : "";
       std::cout << "\t- " << bg3File << "\t" << freqTerm << "\n" << statusTerm << "\n";
+      if (bg3Status>0){
+        statusList_stable.push_back(bg3Status+1);
+        statusList_decay.push_back(bg3Status+2);
+      }
     }
     if (!bg4File.empty()) {
       freqTerm = bg4Freq > 0 ? std::to_string(bg4Freq) + " kHz" : "(from weights)";
-      statusTerm = bg4Status > 0 ? "Shifting all particle status codes from this source by" + std::to_string(bg4Status) : "";
+      statusTerm = bg4Status > 0 ? statusMessage + std::to_string(bg4Status) : "";
       std::cout << "\t- " << bg4File << "\t" << freqTerm << "\n" << statusTerm << "\n";
+      if (bg4Status>0){
+        statusList_stable.push_back(bg4Status+1);
+        statusList_decay.push_back(bg4Status+2);
+      }
     }	
-             
+     auto join = [](const std::vector<int>& vec) {
+        return std::accumulate(vec.begin(), vec.end(), std::string(),
+            [](const std::string& a, int b) {
+                return a.empty() ? std::to_string(b) : a + " " + std::to_string(b);
+            });
+    };
+    std::string stableStatuses = join(statusList_stable);
+    std::string decayStatuses = join(statusList_decay);
+    std::string message = "\n!!!Attention!!!\n To proceed the shifted particles statuses in DD4hep, please add the following options to ddsim:\n"
+                          "--physics.alternativeStableStatuses=\"" + stableStatuses + 
+                          "\"  --physics.alternativeDecayStatuses=\"" + decayStatuses + "\"\n";
+    std::cout << message<<std::endl;           
   }
   
   // ---------------------------------------------------------------------------  
