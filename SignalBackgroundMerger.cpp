@@ -205,7 +205,7 @@ public:
     args.add_argument("-bg1St", "--bg1Status")
       .default_value(0)
       .scan<'i', int>()
-      .help("Apply shift on particle generatorStatus code for first background source. Default is 0. Recommand value: 1000 or larger. See appendix A in arxiv: 1912.08005");
+      .help("Apply shift on particle generatorStatus code for first background source. Default is 0. Recommended value: 1000 or larger. See appendix A in arxiv: 1912.08005");
 
     args.add_argument("-bg2", "--bg2File")
       .default_value(std::string("root://dtn-eic.jlab.org//work/eic2/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/electron/beam_gas_ep_10GeV_foam_emin10keV_30Mevt.hepmc3.tree.root"))
