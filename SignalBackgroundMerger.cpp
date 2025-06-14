@@ -17,7 +17,6 @@
 #include <random>
 #include <tuple>
 #include <sys/resource.h>
-#include <fmt/core.h>
 
 #include <HepMC3/ReaderFactory.h>
 #include <HepMC3/WriterAscii.h>
