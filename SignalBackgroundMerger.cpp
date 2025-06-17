@@ -90,6 +90,7 @@ public:
     PrepData ( bg2File, bg2Freq, bg2Skip, bg2Status, false);
     PrepData ( bg3File, bg3Freq, bg3Skip, bg3Status, false);
     PrepData ( bg4File, bg4Freq, bg4Skip, bg4Status, false);
+    PrepData ( bg5File, bg5Freq, bg5Skip, bg5Status, false);
     
     auto t1 = std::chrono::high_resolution_clock::now();
     std::cout << "Initiation time: " << std::round(std::chrono::duration<double, std::chrono::seconds::period>(t1 - t0).count()) << " sec" << std::endl;
@@ -262,6 +263,25 @@ public:
       .default_value(0)
       .scan<'i', int>()
       .help("Apply shift on particle generatorStatus code for fourth background source. Default is 0");
+
+    args.add_argument("-bg5", "--bg5File")
+      .default_value(std::string("root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run2.ab.hepmc3.tree.root"))
+      .help("Name of the fifth HEPMC file with background events");
+    
+    args.add_argument("-bf5", "--bg5Freq")
+      .default_value(184.0)
+      .scan<'g', double>()
+      .help("Fifth background frequency in kHz. Default is the estimated DIS rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
+    
+    args.add_argument("-bg5S", "--bg5Skip")
+      .default_value(0)
+      .scan<'i', int>()
+      .help("Number of fifth background events to skip. Default is 0");
+
+    args.add_argument("-bg5St", "--bg5Status")
+      .default_value(0)
+      .scan<'i', int>()
+      .help("Apply shift on particle generatorStatus code for fifth background source. Default is 0");
     
     args.add_argument("-o", "--outputFile")
       .default_value(std::string("bgmerged.hepmc3.tree.root"))
@@ -330,6 +350,11 @@ public:
     bg4Freq = args.get<double>("--bg4Freq");
     bg4Skip = args.get<int>("--bg4Skip");
     bg4Status = args.get<int>("--bg4Status");
+
+    bg5File = args.get<std::string>("--bg5File");
+    bg5Freq = args.get<double>("--bg5Freq");
+    bg5Skip = args.get<int>("--bg5Skip");
+    bg5Status = args.get<int>("--bg5Status");
     
     outputFile = args.get<std::string>("--outputFile");
     rootFormat = args.get<bool>("--rootFormat");
@@ -402,6 +427,17 @@ public:
         statusList_decay.push_back(bg4Status+2);
       }
     }	
+
+    if (!bg5File.empty()) {
+      freqTerm = bg5Freq > 0 ? std::to_string(bg5Freq) + " kHz" : "(from weights)";
+      statusTerm = bg5Status > 0 ? statusMessage + std::to_string(bg5Status) : "";
+      std::cout << "\t- " << bg5File << "\t" << freqTerm << "\n" << statusTerm << "\n";
+      if (bg5Status>0){
+        statusList_stable.push_back(bg5Status+1);
+        statusList_decay.push_back(bg5Status+2);
+      }
+    }	
+
      auto join = [](const std::vector<int>& vec) {
         return std::accumulate(vec.begin(), vec.end(), std::string(),
             [](const std::string& a, int b) {
@@ -750,10 +786,10 @@ public:
   
   // private:
   std::mt19937 rng;
-  string signalFile, bg1File, bg2File, bg3File, bg4File;
-  double signalFreq, bg1Freq, bg2Freq, bg3Freq, bg4Freq;
-  int signalSkip, bg1Skip, bg2Skip, bg3Skip, bg4Skip;
-  int signalStatus, bg1Status, bg2Status, bg3Status, bg4Status;
+  string signalFile, bg1File, bg2File, bg3File, bg4File, bg5File;
+  double signalFreq, bg1Freq, bg2Freq, bg3Freq, bg4Freq, bg5Freq;
+  int signalSkip, bg1Skip, bg2Skip, bg3Skip, bg4Skip, bg5Skip;
+  int signalStatus, bg1Status, bg2Status, bg3Status, bg4Status, bg5Status;
   string outputFile;
   string outputFileName;
   bool rootFormat;
