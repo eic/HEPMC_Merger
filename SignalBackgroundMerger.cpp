@@ -110,19 +110,28 @@ public:
   std::vector<BackgroundConfig>
   parse_backgrounds(const std::vector<std::string> &raw_args_list) {
     std::vector<BackgroundConfig> backgrounds;
-
+    auto is_pure_integer = [](const std::string &str) {
+      if (str.empty()) return false;
+      for (char c : str) {
+        if (!std::isdigit(c)) return false;
+      }
+      return true;
+    };
+	  
     // Group strings into sets of 2-4 arguments per background
     for (size_t i = 0; i < raw_args_list.size();) {
       // Determine how many arguments this background has
       size_t args_count = 2; // minimum
 
+
+
       // Look ahead to see if next strings can be parsed as numbers (skip/status)
-      if (i + 2 < raw_args_list.size()) {
+      if (i + 2 < raw_args_list.size() && is_pure_integer(raw_args_list[i + 2])) {
         try {
           std::stoi(raw_args_list[i + 2]);
           args_count = 3;
 
-          if (i + 3 < raw_args_list.size()) {
+          if (i + 3 < raw_args_list.size() && is_pure_integer(raw_args_list[i + 3])) {
             try {
               std::stoi(raw_args_list[i + 3]);
               args_count = 4;
