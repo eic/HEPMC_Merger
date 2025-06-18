@@ -106,28 +106,63 @@ public:
   }
 
   // Helper to parse raw strings into BackgroundConfig structs
-  std::vector<BackgroundConfig> parse_backgrounds(const std::vector<std::vector<std::string>>& raw_args_list){
+  std::vector<BackgroundConfig>
+  parse_backgrounds(const std::vector<std::string> &raw_args_list) {
     std::vector<BackgroundConfig> backgrounds;
-    for (size_t i = 0; i < raw_args_list.size(); ++i) {
-      const auto& args = raw_args_list[i];
-      if (args.size() < 2 || args.size() > 4) {
-        throw std::runtime_error("Background file " + std::to_string(i) + 
-                                 " must have between 2 and 4 arguments");
+
+    // Group strings into sets of 2-4 arguments per background
+    for (size_t i = 0; i < raw_args_list.size();) {
+      // Determine how many arguments this background has
+      size_t args_count = 2; // minimum
+
+      // Look ahead to see if next strings can be parsed as numbers (skip/status)
+      if (i + 2 < raw_args_list.size()) {
+        try {
+          std::stoi(raw_args_list[i + 2]);
+          args_count = 3;
+
+          if (i + 3 < raw_args_list.size()) {
+            try {
+              std::stoi(raw_args_list[i + 3]);
+              args_count = 4;
+            } catch (...) {
+              // Not a valid integer, stick with 3 args
+            }
+          }
+        } catch (...) {
+          // Not a valid integer, stick with 2 args
         }
+      }
+
+      // Ensure we don't go beyond the vector bounds
+      if (i + args_count > raw_args_list.size()) {
+        args_count = raw_args_list.size() - i;
+      }
+
+      if (args_count < 2) {
+        throw std::runtime_error("Background file " +
+                                 std::to_string(backgrounds.size()) +
+                                 " must have at least 2 arguments");
+      }
+
       try {
         BackgroundConfig bg;
-        bg.file = args[0];
-        bg.frequency = std::stod(args[1]);
-        bg.skip = (args.size() > 2) ? std::stoi(args[2]) : 0;
-        bg.status = (args.size() > 3) ? std::stoi(args[3]) : 0;
+        bg.file = raw_args_list[i];
+        bg.frequency = std::stod(raw_args_list[i + 1]);
+        bg.skip = (args_count > 2) ? std::stoi(raw_args_list[i + 2]) : 0;
+        bg.status = (args_count > 3) ? std::stoi(raw_args_list[i + 3]) : 0;
         backgrounds.push_back(bg);
-      } catch (const std::exception& e) {
-        throw std::runtime_error("Error parsing background file " + std::to_string(i) + 
-                                 ": " + e.what());
+      } catch (const std::exception &e) {
+        throw std::runtime_error("Error parsing background file " +
+                                 std::to_string(backgrounds.size()) + ": " +
+                                 e.what());
       }
+
+      i += args_count;
     }
+
     return backgrounds;
-}
+  }
 
   void merge(){
     auto t1 = std::chrono::high_resolution_clock::now();
@@ -271,7 +306,7 @@ public:
     signalFreq = args.get<double>("--signalFreq");
     signalSkip = args.get<int>("--signalSkip");
     signalStatus = args.get<int>("--signalStatus");
-    backgroundFiles = parse_backgrounds(args.get<std::vector<std::vector<std::string>>>("--bgFile"));
+    backgroundFiles = parse_backgrounds(args.get<std::vector<std::string>>("--bgFile"));
     outputFile = args.get<std::string>("--outputFile");
     rootFormat = args.get<bool>("--rootFormat");
     intWindow  = args.get<double>("--intWindow");
