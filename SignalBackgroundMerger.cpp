@@ -108,22 +108,26 @@ public:
   // Helper to parse raw strings into BackgroundConfig structs
   std::vector<BackgroundConfig> parse_backgrounds(const std::vector<std::vector<std::string>>& raw_args_list){
     std::vector<BackgroundConfig> backgrounds;
-
-    for (const auto& args : raw_args_list) {
+    for (size_t i = 0; i < raw_args_list.size(); ++i) {
+      const auto& args = raw_args_list[i];
       if (args.size() < 2 || args.size() > 4) {
-        throw std::runtime_error("Each --bg must have between 2 and 4 arguments");
+        throw std::runtime_error("Background file " + std::to_string(i) + 
+                                 " must have between 2 and 4 arguments");
+        }
+      try {
+        BackgroundConfig bg;
+        bg.file = args[0];
+        bg.frequency = std::stod(args[1]);
+        bg.skip = (args.size() > 2) ? std::stoi(args[2]) : 0;
+        bg.status = (args.size() > 3) ? std::stoi(args[3]) : 0;
+        backgrounds.push_back(bg);
+      } catch (const std::exception& e) {
+        throw std::runtime_error("Error parsing background file " + std::to_string(i) + 
+                                 ": " + e.what());
       }
-
-      BackgroundConfig bg;
-      bg.file = args[0];
-      bg.frequency = std::stod(args[1]);
-      bg.skip = (args.size() > 2) ? std::stoi(args[2]) : 0;
-      bg.status = (args.size() > 3) ? std::stoi(args[3]) : 0;
-
-      backgrounds.push_back(bg);
     }
     return backgrounds;
-  }
+}
 
   void merge(){
     auto t1 = std::chrono::high_resolution_clock::now();
