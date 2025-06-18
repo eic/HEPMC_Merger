@@ -267,7 +267,7 @@ public:
     signalFreq = args.get<double>("--signalFreq");
     signalSkip = args.get<int>("--signalSkip");
     signalStatus = args.get<int>("--signalStatus");
-    backgroundFiles = parse_backgrounds(program.get<std::vector<std::vector<std::string>>>("--bgFile"));
+    backgroundFiles = parse_backgrounds(args.get<std::vector<std::vector<std::string>>>("--bgFile"));
     outputFile = args.get<std::string>("--outputFile");
     rootFormat = args.get<bool>("--rootFormat");
     intWindow  = args.get<double>("--intWindow");
