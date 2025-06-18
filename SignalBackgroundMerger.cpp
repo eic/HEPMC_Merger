@@ -38,11 +38,12 @@ using std::string;
     Combine signal and up to four background HEPMC files.
     
     Typical usage:
-    ./SignalBackgroundMerger --signalFile dis.hepmc --signalFreq 0 \
-            --bg1File hgas.hepmc --bg1Freq 31.9 \
-            --bg2File egas.hepmc --bg2Freq 3177.25 \
-            --bg3File sr.hepmc \
-            --bg4File bg4.hepmc --bg4Freq 1000.0
+    ./SignalBackgroundMerger --signalFile dis.hepmc3.tree.root --signalFreq 0 \
+            --bgFile hgas.hepmc3.tree.root 2000 0 2000 \
+	    --bgFile egastouschk.hepmc3.tree.root 20 0 3000 \
+            --bgFile egascouloumb.hepmc3.tree.root 20 0 4000 \
+	    --bgFile egasbrems.hepmc3.tree.root 20 0 5000 \
+            --bgFile synrad.hepmc3.tree.root 25 0 6000
 **/    
 
 struct BackgroundConfig {
