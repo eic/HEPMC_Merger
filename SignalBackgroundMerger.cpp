@@ -38,12 +38,21 @@ using std::string;
     Combine signal and up to four background HEPMC files.
     
     Typical usage:
-    ./SignalBackgroundMerger --signalFile dis.hepmc --signalFreq 0 \
-            --bg1File hgas.hepmc --bg1Freq 31.9 \
-            --bg2File egas.hepmc --bg2Freq 3177.25 \
-            --bg3File sr.hepmc \
-            --bg4File bg4.hepmc --bg4Freq 1000.0
+    ./SignalBackgroundMerger --signalFile dis.hepmc3.tree.root --signalFreq 0 \
+            --bgFile hgas.hepmc3.tree.root 2000 0 2000 \
+	    --bgFile egastouschk.hepmc3.tree.root 20 0 3000 \
+            --bgFile egascouloumb.hepmc3.tree.root 20 0 4000 \
+	    --bgFile egasbrems.hepmc3.tree.root 20 0 5000 \
+            --bgFile synrad.hepmc3.tree.root 25 0 6000
 **/    
+
+struct BackgroundConfig {
+    std::string file;
+    double frequency=0;
+    int skip=0;
+    int status=0;
+} ;
+
 class SignalBackgroundMerger {
 
 private:
@@ -86,15 +95,71 @@ public:
     cout << "Writing to " << outputFileName << endl;
 
     PrepData ( signalFile, signalFreq, signalSkip, signalStatus, true );
-    PrepData ( bg1File, bg1Freq, bg1Skip, bg1Status, false);
-    PrepData ( bg2File, bg2Freq, bg2Skip, bg2Status, false);
-    PrepData ( bg3File, bg3Freq, bg3Skip, bg3Status, false);
-    PrepData ( bg4File, bg4Freq, bg4Skip, bg4Status, false);
+    for (const auto& bg : backgroundFiles) {
+	PrepData ( bg.file, bg.frequency, bg.skip, bg.status, false );
+    }
+    
     
     auto t1 = std::chrono::high_resolution_clock::now();
     std::cout << "Initiation time: " << std::round(std::chrono::duration<double, std::chrono::seconds::period>(t1 - t0).count()) << " sec" << std::endl;
     std::cout << "\n==================================================================\n" << std::endl;
 
+  }
+
+  // Helper to parse raw strings into BackgroundConfig structs
+  std::vector<BackgroundConfig>
+  parse_backgrounds(const std::vector<std::string> &raw_args_list) {
+    std::vector<BackgroundConfig> backgrounds;
+    auto is_pure_integer = [](const std::string &str) {
+      if (str.empty()) return false;
+      for (char c : str) {
+        if (!std::isdigit(c)) return false;
+      }
+      return true;
+    };
+	  
+    // Group strings into sets of 2-4 arguments per background
+    for (size_t i = 0; i < raw_args_list.size();) {
+      // Determine how many arguments this background has
+      size_t args_count = 2; // minimum
+
+      // Look ahead to see if next strings can be parsed as numbers (skip/status)
+      if (i + 2 < raw_args_list.size() && is_pure_integer(raw_args_list[i + 2])) {
+          args_count = 3;
+
+          if (i + 3 < raw_args_list.size() && is_pure_integer(raw_args_list[i + 3])) {
+              args_count = 4;
+          }
+      }
+
+      // Ensure we don't go beyond the vector bounds
+      if (i + args_count > raw_args_list.size()) {
+        args_count = raw_args_list.size() - i;
+      }
+
+      if (args_count < 2) {
+        throw std::runtime_error("Background file " +
+                                 std::to_string(backgrounds.size()) +
+                                 " must have at least 2 arguments");
+      }
+
+      try {
+        BackgroundConfig bg;
+        bg.file = raw_args_list[i];
+        bg.frequency = std::stod(raw_args_list[i + 1]);
+        bg.skip = (args_count > 2) ? std::stoi(raw_args_list[i + 2]) : 0;
+        bg.status = (args_count > 3) ? std::stoi(raw_args_list[i + 3]) : 0;
+        backgrounds.push_back(bg);
+      } catch (const std::exception &e) {
+        throw std::runtime_error("Error parsing background file " +
+                                 std::to_string(backgrounds.size()) + ": " +
+                                 e.what());
+      }
+
+      i += args_count;
+    }
+
+    return backgrounds;
   }
 
   void merge(){
@@ -187,81 +252,10 @@ public:
     .scan<'i', int>()
     .help("Apply shift on particle generatorStatus code for signal. Default is 0. ");
 
-    args.add_argument("-bg1", "--bg1File")
-      .default_value(std::string("root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/proton/pythia8.306-1.0/100GeV/pythia8.306-1.0_ProtonBeamGas_100GeV_run082.hepmc3.tree.root"))
-      .help("Name of the first HEPMC file with background events");
-    
-    args.add_argument("-bf1", "--bg1Freq")
-      .default_value( 31.9 )
-      .scan<'g', double>()
-      .help("First background frequency in kHz. Default is the estimated hadron gas rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
-    
-    args.add_argument("-bg1S", "--bg1Skip")
-    .default_value(0)
-    .scan<'i', int>()
-    .help("Number of first background events to skip. Default is 0.");
-
-    args.add_argument("-bg1St", "--bg1Status")
-      .default_value(0)
-      .scan<'i', int>()
-      .help("Apply shift on particle generatorStatus code for first background source. Default is 0. Recommended value: 1000 or larger. See appendix A in arxiv: 1912.08005");
-
-    args.add_argument("-bg2", "--bg2File")
-      .default_value(std::string("root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/electron/beam_gas_ep_10GeV_foam_emin10keV_30Mevt.hepmc3.tree.root"))
-      .help("Name of the second HEPMC file with background events");
-    
-    args.add_argument("-bf2", "--bg2Freq")
-      .default_value(3177.25)
-      .scan<'g', double>()
-      .help("Second background frequency in kHz. Default is the estimated electron gas rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
-    
-    args.add_argument("-bg2S", "--bg2Skip")
-      .default_value(0)
-      .scan<'i', int>()
-      .help("Number of second background events to skip. Default is 0.");
-
-    args.add_argument("-bg2St", "--bg2Status")
-      .default_value(0)
-      .scan<'i', int>()
-      .help("Apply shift on particle generatorStatus code for second background source. Default is 0");
-
-    args.add_argument("-bg3", "--bg3File")
-      .default_value(std::string(""))
-      .help("Name of the third HEPMC file with background events");
-    
-    args.add_argument("-bf3", "--bg3Freq")
-      .default_value(0.0)
-      .scan<'g', double>()
-      .help("Third background frequency in kHz. Default is 0 to use the weights in the corresponding input file. Set to a value >0 to specify a frequency instead.");
-    
-    args.add_argument("-bg3S", "--bg3Skip")
-      .default_value(0)
-      .scan<'i', int>()
-      .help("Number of third background events to skip. Default is 0");
-    
-    args.add_argument("-bg3St", "--bg3Status")
-      .default_value(0)
-      .scan<'i', int>()
-      .help("Apply shift on particle generatorStatus code for third background source. Default is 0");
-
-    args.add_argument("-bg4", "--bg4File")
-      .default_value(std::string("root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run2.ab.hepmc3.tree.root"))
-      .help("Name of the fourth HEPMC file with background events");
-    
-    args.add_argument("-bf4", "--bg4Freq")
-      .default_value(184.0)
-      .scan<'g', double>()
-      .help("Fourth background frequency in kHz. Default is the estimated DIS rate at 10x100. Set to 0 to use the weights in the corresponding input file.");
-    
-    args.add_argument("-bg4S", "--bg4Skip")
-      .default_value(0)
-      .scan<'i', int>()
-      .help("Number of fourth background events to skip. Default is 0");
-
-    args.add_argument("-bg4St", "--bg4Status")
-      .default_value(0)
-      .scan<'i', int>()
-      .help("Apply shift on particle generatorStatus code for fourth background source. Default is 0");
+    args.add_argument("-b","--bgFile")
+      .nargs(2,4)
+      .append()
+      .help("Tuple with name of the HEPMC file with background events, background frequency in kHz, number of background events to skip (default 0), shift on particle generatorStatus code (default 0).");
     
     args.add_argument("-o", "--outputFile")
       .default_value(std::string("bgmerged.hepmc3.tree.root"))
@@ -310,27 +304,7 @@ public:
     signalFreq = args.get<double>("--signalFreq");
     signalSkip = args.get<int>("--signalSkip");
     signalStatus = args.get<int>("--signalStatus");
-
-    bg1File = args.get<std::string>("--bg1File");
-    bg1Freq = args.get<double>("--bg1Freq");
-    bg1Skip = args.get<int>("--bg1Skip");
-    bg1Status = args.get<int>("--bg1Status");
-
-    bg2File = args.get<std::string>("--bg2File");
-    bg2Freq = args.get<double>("--bg2Freq");
-    bg2Skip = args.get<int>("--bg2Skip");
-    bg2Status = args.get<int>("--bg2Status");
-
-    bg3File = args.get<std::string>("--bg3File");
-    bg3Freq = args.get<double>("--bg3Freq");
-    bg3Skip = args.get<int>("--bg3Skip");
-    bg3Status = args.get<int>("--bg3Status");
-
-    bg4File = args.get<std::string>("--bg4File");
-    bg4Freq = args.get<double>("--bg4Freq");
-    bg4Skip = args.get<int>("--bg4Skip");
-    bg4Status = args.get<int>("--bg4Status");
-    
+    backgroundFiles = parse_backgrounds(args.get<std::vector<std::string>>("--bgFile"));
     outputFile = args.get<std::string>("--outputFile");
     rootFormat = args.get<bool>("--rootFormat");
     intWindow  = args.get<double>("--intWindow");
@@ -366,43 +340,20 @@ public:
     std::cout << "\t- " << signalFile << "\t" << freqTerm << "\n" << statusTerm << "\n";
     
     std::cout << "\nBackground files and their respective frequencies:\n";
-    if (!bg1File.empty()) {
-      freqTerm = bg1Freq > 0 ? std::to_string(bg1Freq) + " kHz" : "(from weights)";
-      statusTerm = bg1Status > 0 ? statusMessage + std::to_string(bg1Status) : "";
-      std::cout << "\t- " << bg1File << "\t" << freqTerm << "\n" << statusTerm << "\n";
-      if (bg1Status>0){
-        statusList_stable.push_back(bg1Status+1);
-        statusList_decay.push_back(bg1Status+2);
+
+    for (const auto& bg : backgroundFiles) {
+      if (!bg.file.empty()) {
+        freqTerm = bg.frequency > 0 ? std::to_string(bg.frequency) + " kHz" : "(from weights)";
+        statusTerm = bg.status > 0 ? statusMessage + std::to_string(bg.status) : "";
+        std::cout << "\t- " << bg.file << "\t" << freqTerm << "\n" << statusTerm << "\n";
+        if (bg.status>0){
+          statusList_stable.push_back(bg.status+1);
+          statusList_decay.push_back(bg.status+2);
+        }
       }
     }
-    if (!bg2File.empty()) {
-      freqTerm = bg2Freq > 0 ? std::to_string(bg2Freq) + " kHz" : "(from weights)";
-      statusTerm = bg2Status > 0 ? statusMessage + std::to_string(bg2Status) : "";
-      std::cout << "\t- " << bg2File << "\t" << freqTerm << "\n" << statusTerm << "\n";
-      if (bg2Status>0){
-        statusList_stable.push_back(bg2Status+1);
-        statusList_decay.push_back(bg2Status+2);
-      }
-    }
-    if (!bg3File.empty()) {
-      freqTerm = bg3Freq > 0 ? std::to_string(bg3Freq) + " kHz" : "(from weights)";
-      statusTerm = bg3Status > 0 ? statusMessage + std::to_string(bg3Status) : "";
-      std::cout << "\t- " << bg3File << "\t" << freqTerm << "\n" << statusTerm << "\n";
-      if (bg3Status>0){
-        statusList_stable.push_back(bg3Status+1);
-        statusList_decay.push_back(bg3Status+2);
-      }
-    }
-    if (!bg4File.empty()) {
-      freqTerm = bg4Freq > 0 ? std::to_string(bg4Freq) + " kHz" : "(from weights)";
-      statusTerm = bg4Status > 0 ? statusMessage + std::to_string(bg4Status) : "";
-      std::cout << "\t- " << bg4File << "\t" << freqTerm << "\n" << statusTerm << "\n";
-      if (bg4Status>0){
-        statusList_stable.push_back(bg4Status+1);
-        statusList_decay.push_back(bg4Status+2);
-      }
-    }	
-     auto join = [](const std::vector<int>& vec) {
+   	
+    auto join = [](const std::vector<int>& vec) {
         return std::accumulate(vec.begin(), vec.end(), std::string(),
             [](const std::string& a, int b) {
                 return a.empty() ? std::to_string(b) : a + " " + std::to_string(b);
@@ -750,10 +701,11 @@ public:
   
   // private:
   std::mt19937 rng;
-  string signalFile, bg1File, bg2File, bg3File, bg4File;
-  double signalFreq, bg1Freq, bg2Freq, bg3Freq, bg4Freq;
-  int signalSkip, bg1Skip, bg2Skip, bg3Skip, bg4Skip;
-  int signalStatus, bg1Status, bg2Status, bg3Status, bg4Status;
+  string signalFile;
+  double signalFreq;
+  int signalSkip;
+  int signalStatus;
+  std::vector<BackgroundConfig> backgroundFiles;  
   string outputFile;
   string outputFileName;
   bool rootFormat;
