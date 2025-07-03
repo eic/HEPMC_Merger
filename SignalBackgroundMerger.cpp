@@ -297,7 +297,7 @@ public:
     catch (const std::runtime_error& err) {
       std::cout << err.what() << std::endl;
       std::cout << args;
-      exit(0);
+      exit(EXIT_FAILURE);
     }
     // Access arguments using args.get method
     signalFile = args.get<std::string>("--signalFile");
@@ -380,7 +380,7 @@ public:
       }
     } catch (const std::runtime_error& e) {
       std::cerr << "Opening " << fileName << " failed: " << e.what() << std::endl;
-      exit(1);
+      exit(EXIT_FAILURE);
     }
     
     infoDict[fileName] = {0,0};
@@ -535,7 +535,7 @@ public:
     if (freq == 0){
       if (!signal) {
         std::cerr << "frequency can't be 0 for background files" << std::endl;
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       // exactly one signal event, at an arbitrary point
       timeline.push_back(uni(rng));
@@ -731,5 +731,5 @@ int main(int argc, char* argv[]) {
   std::cout << "\n==================================================================\n";
   std::cout << "Overall running time: " << std::round(std::chrono::duration<double, std::chrono::minutes::period>(std::chrono::high_resolution_clock::now() - t0).count()) << " min" << std::endl;
   
-  return 0;
+  return EXIT_SUCCESS;
 }
