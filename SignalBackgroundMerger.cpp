@@ -242,11 +242,6 @@ public:
       .scan<'g', double>()
       .help("Signal frequency in kHz. Default is 0 to have exactly one signal event per slice. Set to the estimated DIS rate to randomize.");
 
-    args.add_argument("-sw", "--signalWeight")
-      .default_value(false)
-      .implicit_value(true)
-      .help("Preserve signal weight from the HepMC header. This makes sense only if signalFreq is set to 0 (and even then it may not, if background is present). Default is false.");
-
     args.add_argument("-S", "--signalSkip")
       .default_value(0)
     .scan<'i', int>()
@@ -307,11 +302,6 @@ public:
     // Access arguments using args.get method
     signalFile = args.get<std::string>("--signalFile");
     signalFreq = args.get<double>("--signalFreq");
-    signalWeight = args.get<bool>("--signalWeight");
-    if (signalWeight && signalFreq != 0.0) {
-      std::cerr << "Error: --signalWeight can only be used if --signalFreq is set to 0." << std::endl;
-      exit(1);
-    }
     signalSkip = args.get<int>("--signalSkip");
     signalStatus = args.get<int>("--signalStatus");
     backgroundFiles = parse_backgrounds(args.get<std::vector<std::string>>("--bgFile"));
@@ -578,10 +568,9 @@ public:
 
       HepMC3::GenEvent inevt;
       adapter->read_event(inevt);
-      if (signal && signalWeight){
+      if (signal){
         hepSlice->weights() = inevt.weights();
       }
-
 
       if (squashTime) time = 0;
       particleCount += insertHepmcEvent( inevt, hepSlice, time, baseStatus, signal);
@@ -720,7 +709,6 @@ public:
   double signalFreq;
   int signalSkip;
   int signalStatus;
-  bool signalWeight;
   std::vector<BackgroundConfig> backgroundFiles;  
   string outputFile;
   string outputFileName;
