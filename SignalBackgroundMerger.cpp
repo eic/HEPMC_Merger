@@ -241,7 +241,7 @@ public:
       .default_value(0.0)
       .scan<'g', double>()
       .help("Signal frequency in kHz. Default is 0 to have exactly one signal event per slice. Set to the estimated DIS rate to randomize.");
-    
+
     args.add_argument("-S", "--signalSkip")
       .default_value(0)
     .scan<'i', int>()
@@ -313,6 +313,7 @@ public:
     rngSeed    = args.get<int>("--rngSeed");
     verbose    = args.get<bool>("--verbose");
 
+    
   }
   
   // ---------------------------------------------------------------------------
@@ -567,6 +568,9 @@ public:
 
       HepMC3::GenEvent inevt;
       adapter->read_event(inevt);
+      if (signal && (signalFreq == 0.0)){
+        hepSlice->weights() = inevt.weights();
+      }
 
       if (squashTime) time = 0;
       particleCount += insertHepmcEvent( inevt, hepSlice, time, baseStatus, signal);
