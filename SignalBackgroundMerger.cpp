@@ -568,7 +568,7 @@ public:
 
       HepMC3::GenEvent inevt;
       adapter->read_event(inevt);
-      if (signal){
+      if (signal && (signalFreq == 0.0)){
         hepSlice->weights() = inevt.weights();
       }
 
