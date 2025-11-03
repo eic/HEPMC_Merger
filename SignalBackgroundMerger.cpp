@@ -17,6 +17,8 @@
 #include <random>
 #include <tuple>
 #include <sys/resource.h>
+#include <list>
+#include <unordered_map>
 
 #include <HepMC3/ReaderFactory.h>
 #include <HepMC3/WriterAscii.h>
@@ -53,16 +55,135 @@ struct BackgroundConfig {
     int status=0;
 } ;
 
+// File pool entry for lazy loading
+struct FileHandle {
+    std::string fileName;
+    std::shared_ptr<HepMC3::Reader> reader;
+    std::chrono::steady_clock::time_point lastAccess;
+};
+
+// File pool manager - keeps only a limited number of files open
+// Tracks positions persistently across close/reopen cycles
+class FilePool {
+private:
+    static constexpr size_t MAX_OPEN_FILES = 20;  // Limit simultaneous open files
+    std::list<FileHandle> openFiles;
+    std::unordered_map<std::string, std::list<FileHandle>::iterator> fileMap;
+
+    // Persistent position tracking (survives file close/reopen)
+    struct PositionInfo {
+        int currentPosition;  // Events read so far
+        int initialSkip;      // Initial skip count from config
+    };
+    std::unordered_map<std::string, PositionInfo> positions;
+
+public:
+    std::shared_ptr<HepMC3::Reader> getReader(const std::string& fileName, int initialSkip = 0) {
+        auto it = fileMap.find(fileName);
+
+        if (it != fileMap.end()) {
+            // File is already open, move to front (LRU)
+            auto handle = it->second;
+            handle->lastAccess = std::chrono::steady_clock::now();
+            openFiles.splice(openFiles.begin(), openFiles, handle);
+            return handle->reader;
+        }
+
+        // Initialize position tracking if this is the first access
+        if (positions.find(fileName) == positions.end()) {
+            positions[fileName] = {0, initialSkip};
+        }
+
+        // Need to open the file
+        std::shared_ptr<HepMC3::Reader> reader;
+        try {
+            reader = HepMC3::deduce_reader(fileName);
+            if (!reader) {
+                throw std::runtime_error("Failed to open file: " + fileName);
+            }
+
+            // Skip to current position (initial skip + events read so far)
+            int totalSkip = positions[fileName].initialSkip + positions[fileName].currentPosition;
+            if (totalSkip > 0) {
+                std::cout << "Reopening " << fileName << ", skipping to position " << totalSkip << std::endl;
+                reader->skip(totalSkip);
+            }
+        } catch (const std::runtime_error& e) {
+            std::cerr << "Opening " << fileName << " failed: " << e.what() << std::endl;
+            throw;
+        }
+
+        // Check if we need to close a file
+        if (openFiles.size() >= MAX_OPEN_FILES) {
+            // Close least recently used file (back of list)
+            auto& oldest = openFiles.back();
+            std::cout << "Closing " << oldest.fileName << " at position "
+                      << positions[oldest.fileName].currentPosition << " (file pool full)" << std::endl;
+            oldest.reader->close();
+            fileMap.erase(oldest.fileName);
+            openFiles.pop_back();
+        }
+
+        // Add new file to front
+        FileHandle handle{fileName, reader, std::chrono::steady_clock::now()};
+        openFiles.push_front(handle);
+        fileMap[fileName] = openFiles.begin();
+
+        return reader;
+    }
+
+    // Increment position after reading an event
+    void incrementPosition(const std::string& fileName) {
+        if (positions.find(fileName) != positions.end()) {
+            positions[fileName].currentPosition++;
+        }
+    }
+
+    // Reset position to beginning (for cycling)
+    void resetPosition(const std::string& fileName) {
+        if (positions.find(fileName) != positions.end()) {
+            std::cout << "Cycling " << fileName << " back to start (was at position "
+                      << positions[fileName].currentPosition << ")" << std::endl;
+            positions[fileName].currentPosition = 0;
+        }
+    }
+
+    int getPosition(const std::string& fileName) const {
+        auto it = positions.find(fileName);
+        return (it != positions.end()) ? it->second.currentPosition : 0;
+    }
+
+    void closeAll() {
+        for (auto& handle : openFiles) {
+            handle.reader->close();
+        }
+        openFiles.clear();
+        fileMap.clear();
+        // Keep position tracking for potential future use
+    }
+
+    size_t size() const { return openFiles.size(); }
+};
+
 class SignalBackgroundMerger {
 
 private:
+  // File pool for lazy loading
+  FilePool filePool;
+
   // more private data at the end; pulling these more complicated objects up for readability
   std::shared_ptr<HepMC3::Reader> sigAdapter;
   double sigFreq = 0;
   int sigStatus = 0;
-  std::map<std::string, std::shared_ptr<HepMC3::Reader>> freqAdapters;
-  std::map<std::string, double> freqs;
-  std::map<std::string, int> baseStatuses;
+
+  // Background file configurations (lazy loaded via filePool)
+  struct BgFileConfig {
+      std::string fileName;
+      double freq;
+      int baseStatus;
+      int skip;
+  };
+  std::vector<BgFileConfig> bgConfigs;
 
   std::map<std::string,
 	  std::tuple<std::vector<HepMC3::GenEvent>,
@@ -102,6 +223,7 @@ public:
     
     auto t1 = std::chrono::high_resolution_clock::now();
     std::cout << "Initiation time: " << std::round(std::chrono::duration<double, std::chrono::seconds::period>(t1 - t0).count()) << " sec" << std::endl;
+    std::cout << "Lazy loading enabled for " << bgConfigs.size() << " background files (max 20 open at once)" << std::endl;
     std::cout << "\n==================================================================\n" << std::endl;
 
   }
@@ -217,9 +339,7 @@ public:
     std::cout << endl << "Maximum Resident Memory " << r_usage.ru_maxrss / mbsize << " MB" << std::endl;
     // clean up, close all files
     sigAdapter->close();
-    for (auto& it : freqAdapters) {
-      it.second->close();
-    }
+    filePool.closeAll();
     f->close();
 	
   }
@@ -320,7 +440,7 @@ public:
   void banner() {
     // Print banner
     std::cout << "==================================================================" << std::endl;
-    std::cout << "=== EPIC HEPMC MERGER ===" << std::endl;
+    std::cout << "=== EPIC HEPMC MERGER (Lazy Loading Version) ===" << std::endl;
     std::cout << "authors: Benjamen Sterwerf* (bsterwerf@berkeley.edu), Kolja Kauder** (kkauder@bnl.gov), Reynier Cruz-Torres***" << std::endl;
     std::cout << "* University of California, Berkeley" << std::endl;
     std::cout << "** Brookhaven National Laboratory" << std::endl;
@@ -400,6 +520,7 @@ public:
       std::vector<HepMC3::GenEvent> events;
       std::vector<double> weights;
 
+      adapter = filePool.getReader(fileName, skip);
       while(!adapter->failed()) {
 	    HepMC3::GenEvent evt(HepMC3::Units::GEV,HepMC3::Units::MM);
 	    adapter->read_event(evt);
@@ -437,11 +558,8 @@ public:
       return;
     }
 
-    // Not signal and not weighted --> prepare frequency backgrounds
-    adapter->skip(skip);
-    freqAdapters[fileName] = adapter;
-    freqs[fileName] = freq;
-    baseStatuses[fileName] = baseStatus;
+    // Not signal and not weighted --> store config for lazy loading
+    bgConfigs.push_back({fileName, freq, baseStatus, skip});
   }
 
    // ---------------------------------------------------------------------------
@@ -499,25 +617,27 @@ public:
     long memory_usage = resident * page_size  / 1024 / 1024 ;    
 #endif
   
-    
+
     std::cout << "Working on slice " << i + 1 << std::endl;
     std::cout << "Current memory usage: " << memory_usage << " MB" << std::endl;
+    std::cout << "File pool size: " << filePool.size() << std::endl;
 
   }
   // ---------------------------------------------------------------------------
 
   std::unique_ptr<HepMC3::GenEvent> mergeSlice(int i) {
     auto hepSlice = std::make_unique<HepMC3::GenEvent>(HepMC3::Units::GEV, HepMC3::Units::MM);
-    
+
     addFreqEvents(signalFile, sigAdapter, sigFreq, hepSlice, signalStatus, true);
-    
-    for (const auto& freqBgs : freqAdapters) {
-      auto fileName=freqBgs.first;
-      addFreqEvents(fileName, freqAdapters[fileName], freqs[fileName], hepSlice, baseStatuses[fileName], false);
+
+    // Use lazy loading for background files
+    for (const auto& bgConfig : bgConfigs) {
+      auto reader = filePool.getReader(bgConfig.fileName, bgConfig.skip);
+      addFreqEvents(bgConfig.fileName, reader, bgConfig.freq, hepSlice, bgConfig.baseStatus, false);
     }
-    
+
     for (const auto& fileName : weightDict) {
-      addWeightedEvents(fileName.first, hepSlice, baseStatuses[fileName.first]);
+      addWeightedEvents(fileName.first, hepSlice, 0);
     }
 
     return hepSlice;
@@ -557,9 +677,9 @@ public:
         if (signal) { // Exhausted signal events
 	        throw std::ifstream::failure("EOF");
 	      } else { // background file reached its end, reset to the start
-	        std::cout << "Cycling back to the start of " << fileName << std::endl;
 	        adapter->close();
-	        adapter = HepMC3::deduce_reader(fileName);
+	        filePool.resetPosition(fileName);
+	        adapter = filePool.getReader(fileName, 0);  // Position already tracked, skip = 0
 	      }
 	    } catch (std::ifstream::failure& e) {
 	        continue; // just need to suppress the error
@@ -568,6 +688,12 @@ public:
 
       HepMC3::GenEvent inevt;
       adapter->read_event(inevt);
+
+      // Track position for background files (not signal)
+      if (!signal) {
+        filePool.incrementPosition(fileName);
+      }
+
       if (signal && (signalFreq == 0.0)){
         hepSlice->weights() = inevt.weights();
       }
