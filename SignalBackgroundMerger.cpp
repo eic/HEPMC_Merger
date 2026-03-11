@@ -170,7 +170,7 @@ public:
 
     runInfo->add_attribute("hepmc_merger_signal_file",
         std::make_shared<HepMC3::StringAttribute>(signalFile));
-    runInfo->add_attribute("signal_frequency_kHz",
+    runInfo->add_attribute("hepmc_merger_signal_frequency_kHz",
         std::make_shared<HepMC3::DoubleAttribute>(signalFreq));
 
     std::string bgFiles, bgFreqs, bgAvgRates;
@@ -186,16 +186,16 @@ public:
       }
       bgAvgRates += std::to_string(avgRate);
     }
-    runInfo->add_attribute("background_files",
+    runInfo->add_attribute("hepmc_merger_background_files",
         std::make_shared<HepMC3::StringAttribute>(bgFiles));
-    runInfo->add_attribute("background_frequencies_kHz",
+    runInfo->add_attribute("hepmc_merger_background_frequencies_kHz",
         std::make_shared<HepMC3::StringAttribute>(bgFreqs));
-    runInfo->add_attribute("background_avg_rates_kHz",
+    runInfo->add_attribute("hepmc_merger_background_avg_rates_kHz",
         std::make_shared<HepMC3::StringAttribute>(bgAvgRates));
 
-    runInfo->add_attribute("integration_window_ns",
+    runInfo->add_attribute("hepmc_merger_integration_window_ns",
         std::make_shared<HepMC3::DoubleAttribute>(intWindow));
-    runInfo->add_attribute("n_slices",
+    runInfo->add_attribute("hepmc_merger_n_slices",
         std::make_shared<HepMC3::IntAttribute>(nSlices));
 
     // Open output file — pass runInfo to constructor so it is written to the header
