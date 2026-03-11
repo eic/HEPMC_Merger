@@ -168,7 +168,7 @@ public:
     // Populate run-level metadata
     auto runInfo = std::make_shared<HepMC3::GenRunInfo>();
 
-    runInfo->add_attribute("signal_file",
+    runInfo->add_attribute("hepmc_merger_signal_file",
         std::make_shared<HepMC3::StringAttribute>(signalFile));
     runInfo->add_attribute("signal_frequency_kHz",
         std::make_shared<HepMC3::DoubleAttribute>(signalFreq));
