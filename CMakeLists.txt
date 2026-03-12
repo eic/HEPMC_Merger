@@ -6,28 +6,43 @@ if(${CMAKE_VERSION} VERSION_LESS 3.12)
 endif()
 
 #----------------------------------------------------------------------------
-# Determine project version from the latest git tag (e.g. v2.1.0 -> 2.1.0).
-# Falls back to the short commit hash if no tag is found, or "unknown" if
-# git is unavailable.
+# Determine project version from git.
+# - Exact tag (e.g. v2.1.0)         -> "2.1.0"
+# - Commits past a tag               -> "2.1.0-5-gaae22ae"  (describe output)
+# - No tag reachable                 -> "0.0.0-<short-hash>"
+# - Git unavailable                  -> "unknown"
 find_package(Git QUIET)
 if(GIT_FOUND)
-  # Try to get the latest tag
+  # `git describe --tags` produces:
+  #   "v2.1.0"              when HEAD is exactly on that tag
+  #   "v2.1.0-5-gaae22ae"  when HEAD is 5 commits past v2.1.0
+  # If no tag is reachable at all the command fails (non-zero exit).
   execute_process(
-    COMMAND ${GIT_EXECUTABLE} describe --tags --abbrev=0
+    COMMAND ${GIT_EXECUTABLE} describe --tags
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    OUTPUT_VARIABLE _GIT_TAG
+    OUTPUT_VARIABLE _GIT_DESCRIBE
     OUTPUT_STRIP_TRAILING_WHITESPACE
     ERROR_QUIET
-    RESULT_VARIABLE _GIT_TAG_RESULT
+    RESULT_VARIABLE _GIT_DESCRIBE_RESULT
   )
-  if(_GIT_TAG_RESULT EQUAL 0 AND _GIT_TAG MATCHES "^v?[0-9]")
-    string(REGEX REPLACE "^v([0-9]+)\\.([0-9]+)\\.?([0-9]*).*" "\\1.\\2.\\3" _PROJECT_VER "${_GIT_TAG}")
+  if(_GIT_DESCRIBE_RESULT EQUAL 0 AND _GIT_DESCRIBE MATCHES "^v?[0-9]")
+    # Parse the tag portion (everything up to the first '-<N>-g<hash>' suffix).
+    string(REGEX REPLACE "^v([0-9]+)\\.([0-9]+)\\.?([0-9]*).*" "\\1.\\2.\\3" _PROJECT_VER "${_GIT_DESCRIBE}")
     # Strip trailing dot if patch component was absent (e.g. "1.0.")
     string(REGEX REPLACE "\\.$" "" _PROJECT_VER "${_PROJECT_VER}")
-    set(_PROJECT_VER_DISPLAY "${_PROJECT_VER}")
+
+    # Check whether HEAD is exactly on the tag (no '-N-g<hash>' suffix).
+    if(_GIT_DESCRIBE MATCHES "^v?[0-9][^-]*$")
+      # Exact tag — clean release version.
+      set(_PROJECT_VER_DISPLAY "${_PROJECT_VER}")
+    else()
+      # Past a tag — append the full describe suffix so the hash is visible.
+      string(REGEX REPLACE "^v?[0-9][0-9.]*-(.+)$" "\\1" _GIT_SUFFIX "${_GIT_DESCRIBE}")
+      set(_PROJECT_VER_DISPLAY "${_PROJECT_VER}-${_GIT_SUFFIX}")
+    endif()
   else()
-    # No tag found — fall back to short commit hash (not a valid semver,
-    # so we use 0.0.0 for CMake's VERSION field and store the hash separately)
+    # No tag reachable — fall back to short commit hash (not a valid semver,
+    # so we use 0.0.0 for CMake's VERSION field and store the hash separately).
     execute_process(
       COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
