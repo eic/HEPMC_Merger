@@ -4,7 +4,50 @@ cmake_minimum_required(VERSION 3.8)
 if(${CMAKE_VERSION} VERSION_LESS 3.12)
   cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
 endif()
-project(SignalBackgroundMerger VERSION 1.0 LANGUAGES CXX)
+
+#----------------------------------------------------------------------------
+# Determine project version from the latest git tag (e.g. v2.1.0 -> 2.1.0).
+# Falls back to the short commit hash if no tag is found, or "unknown" if
+# git is unavailable.
+find_package(Git QUIET)
+if(GIT_FOUND)
+  # Try to get the latest tag
+  execute_process(
+    COMMAND ${GIT_EXECUTABLE} describe --tags --abbrev=0
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE _GIT_TAG
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+    RESULT_VARIABLE _GIT_TAG_RESULT
+  )
+  if(_GIT_TAG_RESULT EQUAL 0 AND _GIT_TAG MATCHES "^v?[0-9]")
+    string(REGEX REPLACE "^v([0-9]+)\\.([0-9]+)\\.?([0-9]*).*" "\\1.\\2.\\3" _PROJECT_VER "${_GIT_TAG}")
+    # Strip trailing dot if patch component was absent (e.g. "1.0.")
+    string(REGEX REPLACE "\\.$" "" _PROJECT_VER "${_PROJECT_VER}")
+    set(_PROJECT_VER_DISPLAY "${_PROJECT_VER}")
+  else()
+    # No tag found — fall back to short commit hash (not a valid semver,
+    # so we use 0.0.0 for CMake's VERSION field and store the hash separately)
+    execute_process(
+      COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+      OUTPUT_VARIABLE _GIT_HASH
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET
+    )
+    set(_PROJECT_VER "0.0.0")
+    set(_PROJECT_VER_DISPLAY "0.0.0-${_GIT_HASH}")
+  endif()
+else()
+  set(_PROJECT_VER "0.0.0")
+  set(_PROJECT_VER_DISPLAY "unknown")
+endif()
+message(STATUS "SignalBackgroundMerger version: ${_PROJECT_VER_DISPLAY} (from git)")
+
+project(SignalBackgroundMerger VERSION ${_PROJECT_VER} LANGUAGES CXX)
+# Make the full display version (including hash suffix when applicable)
+# available as a preprocessor definition and CMake variable
+set(PROJECT_VERSION_DISPLAY "${_PROJECT_VER_DISPLAY}")
 
 
 ## This enables us to use CMAKE_INSTALL_FULL_DATADIR in the code
