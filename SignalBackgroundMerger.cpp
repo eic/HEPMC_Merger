@@ -165,13 +165,46 @@ public:
   void merge(){
     auto t1 = std::chrono::high_resolution_clock::now();
 
-    // Open output file
+    // Populate run-level metadata
+    auto runInfo = std::make_shared<HepMC3::GenRunInfo>();
+
+    runInfo->add_attribute("hepmc_merger_signal_file",
+        std::make_shared<HepMC3::StringAttribute>(signalFile));
+    runInfo->add_attribute("hepmc_merger_signal_frequency_kHz",
+        std::make_shared<HepMC3::DoubleAttribute>(signalFreq));
+
+    std::string bgFiles, bgFreqs, bgAvgRates;
+    for (size_t bi = 0; bi < backgroundFiles.size(); ++bi) {
+      if (bi) { bgFiles += ";"; bgFreqs += ";"; bgAvgRates += ";"; }
+      bgFiles += backgroundFiles[bi].file;
+      bgFreqs += std::to_string(backgroundFiles[bi].frequency);
+      double avgRate = 0.0;
+      if (backgroundFiles[bi].frequency <= 0.0) {
+        auto it = weightDict.find(backgroundFiles[bi].file);
+        if (it != weightDict.end())
+          avgRate = std::get<2>(it->second) * 1e6; // GHz -> kHz
+      }
+      bgAvgRates += std::to_string(avgRate);
+    }
+    runInfo->add_attribute("hepmc_merger_background_files",
+        std::make_shared<HepMC3::StringAttribute>(bgFiles));
+    runInfo->add_attribute("hepmc_merger_background_frequencies_kHz",
+        std::make_shared<HepMC3::StringAttribute>(bgFreqs));
+    runInfo->add_attribute("hepmc_merger_background_avg_rates_kHz",
+        std::make_shared<HepMC3::StringAttribute>(bgAvgRates));
+
+    runInfo->add_attribute("hepmc_merger_integration_window_ns",
+        std::make_shared<HepMC3::DoubleAttribute>(intWindow));
+    runInfo->add_attribute("hepmc_merger_n_slices",
+        std::make_shared<HepMC3::IntAttribute>(nSlices));
+
+    // Open output file — pass runInfo to constructor so it is written to the header
     std::shared_ptr<HepMC3::Writer> f;
     if (rootFormat)
-      f = std::make_shared<HepMC3::WriterRootTree>(outputFileName);
+      f = std::make_shared<HepMC3::WriterRootTree>(outputFileName, runInfo);
     else
-      f = std::make_shared<HepMC3::WriterAscii>(outputFileName);
-    
+      f = std::make_shared<HepMC3::WriterAscii>(outputFileName, runInfo);
+
     // Slice loop
     int i = 0;
     for (i = 0; i<nSlices; ++i ) {
