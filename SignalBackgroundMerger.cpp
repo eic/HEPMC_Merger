@@ -16,6 +16,7 @@
 #include <cmath>
 #include <random>
 #include <tuple>
+#include <unistd.h>
 #include <sys/resource.h>
 
 #include <HepMC3/ReaderFactory.h>
