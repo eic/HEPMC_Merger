@@ -173,12 +173,15 @@ public:
         std::make_shared<HepMC3::StringAttribute>(signalFile));
     runInfo->add_attribute("hepmc_merger_signal_frequency_kHz",
         std::make_shared<HepMC3::DoubleAttribute>(signalFreq));
+    runInfo->add_attribute("hepmc_merger_signal_skip",
+        std::make_shared<HepMC3::IntAttribute>(signalSkip));
 
-    std::string bgFiles, bgFreqs, bgAvgRates;
+    std::string bgFiles, bgFreqs, bgAvgRates, bgSkips;
     for (size_t bi = 0; bi < backgroundFiles.size(); ++bi) {
-      if (bi) { bgFiles += ";"; bgFreqs += ";"; bgAvgRates += ";"; }
+      if (bi) { bgFiles += ";"; bgFreqs += ";"; bgAvgRates += ";"; bgSkips += ";"; }
       bgFiles += backgroundFiles[bi].file;
       bgFreqs += std::to_string(backgroundFiles[bi].frequency);
+      bgSkips += std::to_string(backgroundFiles[bi].skip);
       double avgRate = 0.0;
       if (backgroundFiles[bi].frequency <= 0.0) {
         auto it = weightDict.find(backgroundFiles[bi].file);
@@ -193,6 +196,8 @@ public:
         std::make_shared<HepMC3::StringAttribute>(bgFreqs));
     runInfo->add_attribute("hepmc_merger_background_avg_rates_kHz",
         std::make_shared<HepMC3::StringAttribute>(bgAvgRates));
+    runInfo->add_attribute("hepmc_merger_background_skips",
+        std::make_shared<HepMC3::StringAttribute>(bgSkips));
 
     runInfo->add_attribute("hepmc_merger_integration_window_ns",
         std::make_shared<HepMC3::DoubleAttribute>(intWindow));
