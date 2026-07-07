@@ -40,7 +40,7 @@ set(sources ${PROJECT_SOURCE_DIR}/SignalBackgroundMerger.cpp )
 #
 add_executable(SignalBackgroundMerger ${sources})
 target_compile_definitions(
-  SignalBackgroundMerger PRIVATE HEPMC_MERGER_VERSION=${CMAKE_PROJECT_VERSION})
+  SignalBackgroundMerger PRIVATE HEPMC_MERGER_VERSION_FULL=${HEPMC_MERGER_VERSION_FULL})
 target_compile_features(SignalBackgroundMerger PUBLIC cxx_std_17)
 target_link_libraries(SignalBackgroundMerger ROOT::Tree ROOT::RIO ROOT::Core ROOT::Hist HepMC3::HepMC3 HepMC3::rootIO )
 target_include_directories(SignalBackgroundMerger

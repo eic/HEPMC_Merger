@@ -35,7 +35,7 @@ using std::string;
 
 #define _LITERAL_TO_STRING(s) #s
 #define _AS_STRING(s) _LITERAL_TO_STRING(s)
-const char* hepmc_merger_version = _AS_STRING(HEPMC_MERGER_VERSION);
+const char* hepmc_merger_version = _AS_STRING(HEPMC_MERGER_VERSION_FULL);
 #undef _LITERAL_TO_STRING
 #undef _AS_STRING
 
