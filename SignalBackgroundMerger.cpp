@@ -33,6 +33,11 @@ using std::cerr;
 using std::endl;
 using std::string;
 
+#define _LITERAL_TO_STRING(s) #s
+#define _AS_STRING(s) _LITERAL_TO_STRING(s)
+const char* hepmc_merger_version = _AS_STRING(HEPMC_MERGER_VERSION);
+#undef _LITERAL_TO_STRING
+#undef _AS_STRING
 
 // =============================================================
 /**
@@ -85,6 +90,10 @@ public:
 
     // Parse arguments, print banner, open files, initialize rng
     digestArgs(argc, argv);
+    if (version) {
+      std::cout << "SignalBackgroundMerger version: " << hepmc_merger_version << std::endl;
+      std::exit(EXIT_SUCCESS);
+    }
     rng.seed( rngSeed );
     banner();
     if (outputFile != "" ) {
@@ -169,6 +178,8 @@ public:
     // Populate run-level metadata
     auto runInfo = std::make_shared<HepMC3::GenRunInfo>();
 
+    runInfo->add_attribute("hepmc_merger_version",
+        std::make_shared<HepMC3::StringAttribute>(hepmc_merger_version));
     runInfo->add_attribute("hepmc_merger_signal_file",
         std::make_shared<HepMC3::StringAttribute>(signalFile));
     runInfo->add_attribute("hepmc_merger_signal_frequency_kHz",
@@ -324,6 +335,11 @@ public:
       .default_value(false)
       .implicit_value(true)
       .help("Display details for every slice.");
+
+    args.add_argument("--version")
+      .default_value(false)
+      .implicit_value(true)
+      .help("Display version information.");
     
     try {
       args.parse_args(argc, argv);
@@ -346,6 +362,7 @@ public:
     squashTime = args.get<bool>("--squashTime");
     rngSeed    = args.get<int>("--rngSeed");
     verbose    = args.get<bool>("--verbose");
+    version    = args.get<bool>("--version");
 
     
   }
@@ -752,6 +769,7 @@ public:
   bool squashTime;
   int rngSeed;  // should be unsigned, but argparse cannot read that
   bool verbose;
+  bool version;
   
   const double c_light = 299.792458; // speed of light = 299.792458 mm/ns to get mm  
 };

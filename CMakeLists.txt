@@ -4,8 +4,12 @@ cmake_minimum_required(VERSION 3.8)
 if(${CMAKE_VERSION} VERSION_LESS 3.12)
   cmake_policy(VERSION ${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION})
 endif()
-project(SignalBackgroundMerger VERSION 1.0 LANGUAGES CXX)
 
+# Set version based on git
+include(cmake/git_version.cmake)
+set_git_version(HEPMC_MERGER_VERSION)
+
+project(SignalBackgroundMerger VERSION ${HEPMC_MERGER_VERSION} LANGUAGES CXX)
 
 ## This enables us to use CMAKE_INSTALL_FULL_DATADIR in the code
 ## (should resolve to ${CMAKE_INSTALL_PREFIX}/share)
@@ -35,6 +39,8 @@ set(sources ${PROJECT_SOURCE_DIR}/SignalBackgroundMerger.cpp )
 # Add the executable, and link it to external libraries
 #
 add_executable(SignalBackgroundMerger ${sources})
+target_compile_definitions(
+  SignalBackgroundMerger PRIVATE HEPMC_MERGER_VERSION=${CMAKE_PROJECT_VERSION})
 target_compile_features(SignalBackgroundMerger PUBLIC cxx_std_17)
 target_link_libraries(SignalBackgroundMerger ROOT::Tree ROOT::RIO ROOT::Core ROOT::Hist HepMC3::HepMC3 HepMC3::rootIO )
 target_include_directories(SignalBackgroundMerger
