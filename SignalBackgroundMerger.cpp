@@ -90,10 +90,6 @@ public:
 
     // Parse arguments, print banner, open files, initialize rng
     digestArgs(argc, argv);
-    if (version) {
-      std::cout << "SignalBackgroundMerger version: " << hepmc_merger_version << std::endl;
-      std::exit(EXIT_SUCCESS);
-    }
     rng.seed( rngSeed );
     banner();
     if (outputFile != "" ) {
@@ -276,7 +272,7 @@ public:
     // ArgumentParser internally uses std::string_views,
     // references, iterators, etc.
     // Many of these elements become invalidated after a copy or move.
-    argparse::ArgumentParser args ("Merge signal events with up to four background sources.");
+    argparse::ArgumentParser args ("Merge signal events with up to four background sources.", hepmc_merger_version);
     
     args.add_argument("-i", "--signalFile")
       .default_value(std::string("root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run1.ab.hepmc3.tree.root"))
@@ -336,11 +332,6 @@ public:
       .implicit_value(true)
       .help("Display details for every slice.");
 
-    args.add_argument("--version")
-      .default_value(false)
-      .implicit_value(true)
-      .help("Display version information.");
-    
     try {
       args.parse_args(argc, argv);
     }
@@ -362,7 +353,6 @@ public:
     squashTime = args.get<bool>("--squashTime");
     rngSeed    = args.get<int>("--rngSeed");
     verbose    = args.get<bool>("--verbose");
-    version    = args.get<bool>("--version");
 
     
   }
@@ -769,7 +759,6 @@ public:
   bool squashTime;
   int rngSeed;  // should be unsigned, but argparse cannot read that
   bool verbose;
-  bool version;
   
   const double c_light = 299.792458; // speed of light = 299.792458 mm/ns to get mm  
 };
