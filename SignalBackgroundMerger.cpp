@@ -33,6 +33,11 @@ using std::cerr;
 using std::endl;
 using std::string;
 
+#define _LITERAL_TO_STRING(s) #s
+#define _AS_STRING(s) _LITERAL_TO_STRING(s)
+const char* hepmc_merger_version = _AS_STRING(HEPMC_MERGER_VERSION_FULL);
+#undef _LITERAL_TO_STRING
+#undef _AS_STRING
 
 // =============================================================
 /**
@@ -169,6 +174,8 @@ public:
     // Populate run-level metadata
     auto runInfo = std::make_shared<HepMC3::GenRunInfo>();
 
+    runInfo->add_attribute("hepmc_merger_version",
+        std::make_shared<HepMC3::StringAttribute>(hepmc_merger_version));
     runInfo->add_attribute("hepmc_merger_signal_file",
         std::make_shared<HepMC3::StringAttribute>(signalFile));
     runInfo->add_attribute("hepmc_merger_signal_frequency_kHz",
@@ -270,7 +277,7 @@ public:
     // ArgumentParser internally uses std::string_views,
     // references, iterators, etc.
     // Many of these elements become invalidated after a copy or move.
-    argparse::ArgumentParser args ("Merge signal events with up to four background sources.");
+    argparse::ArgumentParser args ("Merge signal events with up to four background sources.", hepmc_merger_version);
     
     args.add_argument("-i", "--signalFile")
       .default_value(std::string("root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run1.ab.hepmc3.tree.root"))
@@ -329,7 +336,7 @@ public:
       .default_value(false)
       .implicit_value(true)
       .help("Display details for every slice.");
-    
+
     try {
       args.parse_args(argc, argv);
     }
