@@ -20,6 +20,7 @@
 #include <sys/resource.h>
 
 #include <HepMC3/ReaderFactory.h>
+#include <HepMC3/ReaderRootTree.h>
 #include <HepMC3/WriterAscii.h>
 #include "HepMC3/WriterRootTree.h"
 #include "HepMC3/GenRunInfo.h"
@@ -421,7 +422,7 @@ public:
     cout << "Prepping " << fileName << endl;
     std::shared_ptr<HepMC3::Reader> adapter;
     try {
-      adapter = HepMC3::deduce_reader(fileName);
+      adapter = openReader(fileName);
       if (!adapter) {
         throw std::runtime_error("Failed to open file");
       }
@@ -436,7 +437,7 @@ public:
       sigAdapter = adapter;
       sigFreq = freq;
       sigStatus = baseStatus;
-      sigAdapter->skip(skip);
+      applySmartSkip(fileName, sigAdapter, skip);
       return;
     }
 
@@ -484,10 +485,52 @@ public:
     }
 
     // Not signal and not weighted --> prepare frequency backgrounds
-    adapter->skip(skip);
+    applySmartSkip(fileName, adapter, skip);
     freqAdapters[fileName] = adapter;
     freqs[fileName] = freq;
     baseStatuses[fileName] = baseStatus;
+  }
+
+  // ---------------------------------------------------------------------------
+  /// Open a HepMC3 file. For .root inputs construct ReaderRootTree directly so
+  /// we can reach its TTree; deduce_reader wraps it in a ReaderPlugin whose
+  /// underlying Reader* is private and thus not dynamic_cast'able.
+  std::shared_ptr<HepMC3::Reader> openReader(const std::string& fileName) {
+    auto endsWith = [](const std::string& s, const std::string& suffix) {
+      return s.size() >= suffix.size() &&
+             s.compare(s.size() - suffix.size(), suffix.size(), suffix) == 0;
+    };
+    if (endsWith(fileName, ".root")) {
+      return std::make_shared<HepMC3::ReaderRootTree>(fileName);
+    }
+    return HepMC3::deduce_reader(fileName);
+  }
+
+  // ---------------------------------------------------------------------------
+  /// Apply skip, wrapping modulo the file's event count for ROOT TTree inputs.
+  void applySmartSkip(const std::string& fileName,
+                      std::shared_ptr<HepMC3::Reader>& adapter,
+                      long long skip) {
+    if (skip <= 0) { adapter->skip(0); return; }
+    if (auto rrt = std::dynamic_pointer_cast<HepMC3::ReaderRootTree>(adapter)) {
+      Long64_t N = rrt->m_tree ? rrt->m_tree->GetEntries() : 0;
+      if (N > 0) {
+        long long wrapped = skip % static_cast<long long>(N);
+        if (wrapped != skip) {
+          std::cout << "Wrapping skip " << skip << " -> " << wrapped
+                    << " (mod " << N << " events) for " << fileName << std::endl;
+        }
+        adapter->skip(static_cast<int>(wrapped));
+        return;
+      }
+    }
+    if (skip > std::numeric_limits<int>::max()) {
+      std::cout << "Warning: skip " << skip << " exceeds INT_MAX for " << fileName
+                << "; using skip=0 (non-ROOT reader, no length known)." << std::endl;
+      adapter->skip(0);
+    } else {
+      adapter->skip(static_cast<int>(skip));
+    }
   }
 
    // ---------------------------------------------------------------------------
@@ -598,18 +641,20 @@ public:
 
     // Insert events at all specified locations
     for (double time : timeline) {
-      if(adapter->failed()) {
-      try{
-        if (signal) { // Exhausted signal events
-	        throw std::ifstream::failure("EOF");
-	      } else { // background file reached its end, reset to the start
-	        std::cout << "Cycling back to the start of " << fileName << std::endl;
-	        adapter->close();
-	        adapter = HepMC3::deduce_reader(fileName);
-	      }
-	    } catch (std::ifstream::failure& e) {
-	        continue; // just need to suppress the error
+      if (adapter->failed()) {
+        if (signal) {
+          // Exhausted signal events; stop trying to place more.
+          break;
         }
+        // background file reached its end, reset to the start and retry this slot
+        std::cout << "Cycling back to the start of " << fileName << std::endl;
+        adapter->close();
+        adapter = openReader(fileName);
+        if (!adapter || adapter->failed()) {
+          std::cerr << "Failed to reopen " << fileName << " after cycling." << std::endl;
+          break;
+        }
+        // fall through and read event 0 for this timeline entry
       }
 
       HepMC3::GenEvent inevt;
