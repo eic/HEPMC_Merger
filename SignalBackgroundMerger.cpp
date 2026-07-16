@@ -55,7 +55,7 @@ const char* hepmc_merger_version = _AS_STRING(HEPMC_MERGER_VERSION_FULL);
 struct BackgroundConfig {
     std::string file;
     double frequency=0;
-    int skip=0;
+    long long skip=0;
     int status=0;
 } ;
 
@@ -153,7 +153,7 @@ public:
         BackgroundConfig bg;
         bg.file = raw_args_list[i];
         bg.frequency = std::stod(raw_args_list[i + 1]);
-        bg.skip = (args_count > 2) ? std::stoi(raw_args_list[i + 2]) : 0;
+        bg.skip = (args_count > 2) ? std::stoll(raw_args_list[i + 2]) : 0;
         bg.status = (args_count > 3) ? std::stoi(raw_args_list[i + 3]) : 0;
         backgrounds.push_back(bg);
       } catch (const std::exception &e) {
