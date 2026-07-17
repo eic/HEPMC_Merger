@@ -1,0 +1,66 @@
+name: linux-eic-shell
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cvmfs-contrib/github-action-cvmfs@v5
+      - uses: eic/run-cvmfs-osg-eic-shell@main
+        with:
+          platform-release: "eic_xl:nightly"
+          run: |
+            cmake -S . -B build -DCMAKE_INSTALL_PREFIX=install
+            cmake --build build -j$(nproc)
+            cmake --install build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: install
+          path: install
+          retention-days: 1
+          if-no-files-found: error
+
+  smoke-test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cvmfs-contrib/github-action-cvmfs@v5
+      - uses: actions/download-artifact@v8
+        with:
+          name: install
+          path: install
+      - name: Run SignalBackgroundMerger (task 0019 from simulation campaign)
+        uses: eic/run-cvmfs-osg-eic-shell@main
+        with:
+          platform-release: "eic_xl:nightly"
+          run: |
+            chmod +x install/bin/SignalBackgroundMerger
+            install/bin/SignalBackgroundMerger \
+                --rngSeed 20 \
+                --nSlices 100 \
+                --signalSkip 1900 \
+                --signalFile root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/DIS/NC/10x100/minQ2=1/pythia8NCDIS_10x100_minQ2=1_beamEffects_xAngle=-0.025_hiDiv_1.hepmc3.tree.root \
+                --signalFreq 0 \
+                --signalStatus 0 \
+                --intWindow 2000 \
+                --bgFile root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/BACKGROUNDS/SYNRAD/dataprod_rel_1.0.0/10x275/GoldCoating/10um/dataprod_rel_1.0.0_synrad_10x275_run001.preproc_10000repeats.hepmc3.tree.root 13277000 1918476805 2000 \
+                --bgFile root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/electron/GETaLM1.0.0-1.0/10GeV/GETaLM1.0.0-1.0_ElectronBeamGas_10GeV_foam_emin10keV_run001.hepmc3.tree.root 3177.25 1868036278 3000 \
+                --bgFile root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/electron/coulomb/EIC_ESR_Xsuite/dataprod_rel_1.0.1/10x275/10000Ahr/MachineRuntime50s/dataprod_rel_1.0.1_electron_coulomb_10x275_10000Ahr.hepmc3.tree.root 29.56 1868024317 4000 \
+                --bgFile root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/electron/touschek/EIC_ESR_Xsuite/dataprod_rel_1.0.1/10x275/10000Ahr/MachineRuntime50s/dataprod_rel_1.0.1_electron_touschek_10x275_10000Ahr.hepmc3.tree.root 233.5 1868025092 5000 \
+                --bgFile root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/BACKGROUNDS/BEAMGAS/proton/pythia8.306-1.0/100GeV/combined/pythia8.306-1.0_ProtonBeamGas_100GeV_combined.hepmc3.tree.root 31.9 1868024326 6000 \
+                --outputFile merged.hepmc3.tree.root
+            ls -la merged.hepmc3.tree.root
