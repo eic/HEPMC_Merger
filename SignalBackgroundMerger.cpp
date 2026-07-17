@@ -524,13 +524,7 @@ public:
         return;
       }
     }
-    if (skip > std::numeric_limits<int>::max()) {
-      std::cout << "Warning: skip " << skip << " exceeds INT_MAX for " << fileName
-                << "; using skip=0 (non-ROOT reader, no length known)." << std::endl;
-      adapter->skip(0);
-    } else {
-      adapter->skip(static_cast<int>(skip));
-    }
+    adapter->skip(static_cast<int>(skip));
   }
 
    // ---------------------------------------------------------------------------
