@@ -209,6 +209,8 @@ public:
 
     runInfo->add_attribute("hepmc_merger_integration_window_ns",
         std::make_shared<HepMC3::DoubleAttribute>(intWindow));
+    runInfo->add_attribute("hepmc_merger_time_discretization_ns",
+        std::make_shared<HepMC3::DoubleAttribute>(timeDiscretizationNs));
     runInfo->add_attribute("hepmc_merger_n_slices",
         std::make_shared<HepMC3::IntAttribute>(nSlices));
 
@@ -332,6 +334,11 @@ public:
       .default_value(0)
       .action([](const std::string& value) { return std::stoi(value); })
       .help("Random seed, default is None");
+
+    args.add_argument("--timeDiscretization")
+      .default_value(0.0)
+      .scan<'g', double>()
+      .help("Discretize generated event times to this bin size in nanoseconds. Default is 0 (disabled).");
     
     args.add_argument("-v", "--verbose")
       .default_value(false)
@@ -358,6 +365,7 @@ public:
     nSlices    = args.get<int>("--nSlices");
     squashTime = args.get<bool>("--squashTime");
     rngSeed    = args.get<int>("--rngSeed");
+    timeDiscretizationNs = args.get<double>("--timeDiscretization");
     verbose    = args.get<bool>("--verbose");
 
     
@@ -378,6 +386,10 @@ public:
     std::vector<int> statusList_stable, statusList_decay;
 
     std::cout << "Number of Slices:" << nSlices << endl;
+    std::string timeDiscretizationTerm = timeDiscretizationNs > 0.0
+      ? std::to_string(timeDiscretizationNs) + " ns"
+      : "disabled";
+    std::cout << "Time discretization: " << timeDiscretizationTerm << std::endl;
     std::string freqTerm = signalFreq > 0 ? std::to_string(signalFreq) + " kHz" : "(one event per time slice)";
     std::string statusTerm = signalStatus > 0 ? statusMessage + std::to_string(signalStatus): "";
     if (signalStatus>0){
@@ -622,7 +634,7 @@ public:
         exit(EXIT_FAILURE);
       }
       // exactly one signal event, at an arbitrary point
-      timeline.push_back(uni(rng));
+      timeline.push_back(discretizeTime(uni(rng)));
     } else {
       // Generate poisson-distributed times to place events
       timeline = poissonTimes(freq, intWindow);
@@ -705,7 +717,7 @@ public:
     long particleCount = 0;
     if (!squashTime) {
       for ( auto& e : toPlace ){
-	      double time = squashTime ? 0 : uni(rng);
+	      double time = squashTime ? 0 : discretizeTime(uni(rng));
         particleCount += insertHepmcEvent( e, hepSlice, time, baseStatus, signal);
       }
     }
@@ -769,6 +781,21 @@ public:
 
   // ---------------------------------------------------------------------------
 
+  double discretizeTime(double time) const {
+    if (timeDiscretizationNs <= 0.0) {
+      return time;
+    }
+
+    double roundedTime = std::floor(time / timeDiscretizationNs + 0.5) * timeDiscretizationNs;
+    if (roundedTime < 0.0) {
+      roundedTime = 0.0;
+    }
+    if (roundedTime > intWindow) {
+      roundedTime = intWindow;
+    }
+    return roundedTime;
+  }
+
   std::vector<double> poissonTimes(double mu, double endTime) {
     std::exponential_distribution<> exp(mu);
     
@@ -781,7 +808,7 @@ public:
       if (t >= endTime) {
 	break;
       }
-      ret.push_back(t);
+      ret.push_back(discretizeTime(t));
     }
     return ret;
 }
@@ -802,6 +829,7 @@ public:
   int nSlices; // should be long, but argparse cannot read that
   bool squashTime;
   int rngSeed;  // should be unsigned, but argparse cannot read that
+  double timeDiscretizationNs;
   bool verbose;
   
   const double c_light = 299.792458; // speed of light = 299.792458 mm/ns to get mm  
