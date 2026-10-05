@@ -281,7 +281,7 @@ public:
     argparse::ArgumentParser args ("Merge signal events with up to four background sources.", hepmc_merger_version);
     
     args.add_argument("-i", "--signalFile")
-      .default_value(std::string("root://dtn-eic.jlab.org//volatile/eic/EPIC/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run1.ab.hepmc3.tree.root"))
+      .default_value(std::string("root://dtn2304.jlab.org:8443//jlab-osdf-ro/eic/EPIC/volatile/EVGEN/SIDIS/pythia6-eic/1.0.0/10x100/q2_0to1/pythia_ep_noradcor_10x100_q2_0.000000001_1.0_run1.ab.hepmc3.tree.root"))
       .help("Name of the HEPMC file with the signal events");
     
     args.add_argument("-sf", "--signalFreq")
