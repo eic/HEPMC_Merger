@@ -622,7 +622,8 @@ public:
         exit(EXIT_FAILURE);
       }
       // exactly one signal event, at an arbitrary point
-      timeline.push_back(uni(rng));
+      // Set the time to be in the exact middle of a 10ns crossing
+      timeline.push_back(std::trunc(uni(rng)/10.0)*10.0 + 5.0);
     } else {
       // Generate poisson-distributed times to place events
       timeline = poissonTimes(freq, intWindow);
@@ -775,7 +776,9 @@ public:
     double t = 0;
     std::vector<double> ret;
     while (true) {
-      double delt = exp(rng)*1e6;
+
+      // Set the time to be in the exact middle of a 10ns crossing
+      double delt = std::trunc((exp(rng)*1e6)/10.0)*10.0 + 5.0;
       // cout << delt <<endl;
       t += delt;
       if (t >= endTime) {
