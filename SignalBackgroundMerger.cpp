@@ -212,6 +212,11 @@ public:
     runInfo->add_attribute("hepmc_merger_n_slices",
         std::make_shared<HepMC3::IntAttribute>(nSlices));
 
+    runInfo->add_attribute("hepmc_merger_crossing_period",
+        std::make_shared<HepMC3::DoubleAttribute>(crossingPeriod));
+    runInfo->add_attribute("hepmc_merger_global_phase",
+        std::make_shared<HepMC3::DoubleAttribute>(globalPhase));
+
     // Open output file — pass runInfo to constructor so it is written to the header
     std::shared_ptr<HepMC3::Writer> f;
     if (rootFormat)
@@ -338,6 +343,16 @@ public:
       .implicit_value(true)
       .help("Display details for every slice.");
 
+    args.add_argument("-c", "--crossingPeriod")
+      .default_value(10.0)
+      .scan<'g', double>()
+      .help("Beam crossing period in ns, default is 10ns");
+
+    args.add_argument("-p", "--globalPhase")
+      .default_value(0.0)
+      .scan<'g', double>()
+      .help("Collision phase with respect to crossing clock, default is 0ns");
+
     try {
       args.parse_args(argc, argv);
     }
@@ -359,8 +374,9 @@ public:
     squashTime = args.get<bool>("--squashTime");
     rngSeed    = args.get<int>("--rngSeed");
     verbose    = args.get<bool>("--verbose");
+    crossingPeriod = args.get<double>("--crossingPeriod"); 
+    globalPhase    = args.get<double>("--globalPhase"); 
 
-    
   }
   
   // ---------------------------------------------------------------------------
@@ -622,7 +638,8 @@ public:
         exit(EXIT_FAILURE);
       }
       // exactly one signal event, at an arbitrary point
-      timeline.push_back(uni(rng));
+      // Set the time to be in the exact middle of a crossing plus global phase adjustment
+      timeline.push_back(std::trunc(uni(rng)/crossingPeriod)*crossingPeriod + (crossingPeriod/2.0) + globalPhase);
     } else {
       // Generate poisson-distributed times to place events
       timeline = poissonTimes(freq, intWindow);
@@ -775,7 +792,9 @@ public:
     double t = 0;
     std::vector<double> ret;
     while (true) {
-      double delt = exp(rng)*1e6;
+
+      // Set the time to be in the exact middle of a crossing + global phase adjustment
+      double delt = std::trunc((exp(rng)*1e6)/crossingPeriod)*crossingPeriod + (crossingPeriod/2.0) + globalPhase;
       // cout << delt <<endl;
       t += delt;
       if (t >= endTime) {
@@ -803,6 +822,8 @@ public:
   bool squashTime;
   int rngSeed;  // should be unsigned, but argparse cannot read that
   bool verbose;
+  double crossingPeriod;
+  double globalPhase; 
   
   const double c_light = 299.792458; // speed of light = 299.792458 mm/ns to get mm  
 };
